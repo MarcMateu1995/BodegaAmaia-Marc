@@ -373,6 +373,9 @@
     <div class="field"><label>Cuerpo</label><div class="chipset" id="f_cuerpo"></div></div>
     <div class="field"><label>Taninos</label><div class="chipset" id="f_taninos"></div></div>
     <div class="field"><label>Dulzor</label><div class="chipset" id="f_dulzor"></div></div>
+    <div class="field"><label>Estilo</label><div class="chipset" id="f_estilo"></div></div>
+    <div class="field"><label>Acidez</label><div class="chipset" id="f_acidez"></div></div>
+    <div class="field"><label>Persistencia</label><div class="chipset" id="f_persistencia"></div></div>
     <div class="field"><label>Aromas (elige los que encajen)</label><div class="chipset" id="f_aromas"></div></div>
     <div class="field"><label>¿Lo repetiríamos?</label><div class="chipset" id="f_repetir"></div></div>
     <div class="field"><label>¿Quién cató?</label><div class="chipset" id="f_quien"></div></div>
@@ -417,8 +420,11 @@ const TIPOS = [
 const CUERPO = ['Ligero','Medio-ligero','Medio','Con cuerpo','Muy potente'];
 const TANINOS = ['Suaves','Medios','Firmes','Marcados','N/A'];
 const DULZOR = ['Seco','Semi-seco','Semi-dulce','Dulce'];
+const ESTILO = ['Afrutado','Equilibrado','Cremoso'];
+const ACIDEZ = ['Baja','Media','Alta','Muy alta'];
+const PERSISTENCIA = ['Corta','Media','Larga','Muy larga'];
 const AROMAS = ['Fruta roja','Fruta negra','Fruta madura','Cítrico','Floral','Especiado','Herbáceo','Mineral','Madera','Tostado','Vainilla','Ahumado','Balsámico','Cuero/animal'];
-const UVAS = ['Tempranillo','Garnacha','Monastrell','Bobal','Mencía','Graciano','Cariñena','Albariño','Verdejo','Godello','Macabeo','Xarel·lo','Parellada','Moscatel','Cabernet Sauvignon','Merlot','Syrah','Pinot Noir','Malbec','Chardonnay','Sauvignon Blanc','Riesling','Viura'];
+const UVAS = ['Tempranillo','Garnacha','Monastrell','Bobal','Mencía','Graciano','Cariñena','Sumoll','Trepat','Albariño','Verdejo','Godello','Macabeo','Xarel·lo','Parellada','Moscatel','Garnacha Blanca','Picapoll','Palomino','Pedro Ximénez','Cabernet Sauvignon','Cabernet Franc','Merlot','Petit Verdot','Syrah','Pinot Noir','Malbec','Nebbiolo','Sangiovese','Chardonnay','Sauvignon Blanc','Riesling','Gewürztraminer','Chenin Blanc','Viura'];
 
 const DEF_UVAS = {
   'Tempranillo':'La uva tinta más plantada de España. Fruta roja, poco ácida, base de Rioja y Ribera del Duero.',
@@ -428,6 +434,8 @@ const DEF_UVAS = {
   'Mencía':'Tinta gallega/leonesa (Bierzo, Ribeira Sacra). Ligera, floral, poco tánica.',
   'Graciano':'Tinta minoritaria de Rioja. Mucho color y acidez, se usa casi siempre en coupage.',
   'Cariñena':'Tinta de cuerpo y taninos firmes, muy ligada al Priorat y Montsant.',
+  'Sumoll':'Tinta catalana casi desaparecida, hoy en recuperación en el Penedès. Muy ácida y de color intenso, poco alcohol.',
+  'Trepat':'Tinta catalana de la Conca de Barberà, ligera y poco tánica. Base de los cavas y vinos rosados de la zona.',
   'Albariño':'Blanca gallega (Rías Baixas). Cítrica, salina, muy aromática.',
   'Verdejo':'Blanca de Rueda. Notas de hinojo y hierba fresca, acidez media.',
   'Godello':'Blanca gallega, más untuosa que el Albariño, con notas minerales.',
@@ -435,14 +443,24 @@ const DEF_UVAS = {
   'Xarel·lo':'Blanca catalana, estructura y acidez, clave en el cava.',
   'Parellada':'Blanca catalana, más suave y floral, aporta finura al cava.',
   'Moscatel':'Blanca muy aromática, a menudo dulce o semidulce, notas de uva de mesa y flores.',
+  'Garnacha Blanca':'Blanca de cuerpo medio, notas de fruta de hueso y frutos secos, poca acidez.',
+  'Picapoll':'Blanca mediterránea (Pla de Bages), fresca, cítrica y ligeramente floral.',
+  'Palomino':'Blanca andaluza, base del vino de Jerez. Poco aromática por sí sola.',
+  'Pedro Ximénez':'Blanca andaluza, se seca al sol (asoleo) para dar vinos muy dulces y oscuros.',
   'Cabernet Sauvignon':'Tinta internacional. Taninos firmes, notas de grosella negra y pimiento verde.',
+  'Cabernet Franc':'Tinta internacional, más ligera y aromática que el Cabernet Sauvignon, notas de pimiento y grafito.',
   'Merlot':'Tinta internacional, más suave que el Cabernet, ciruela y taninos redondos.',
+  'Petit Verdot':'Tinta bordelesa que casi siempre se usa en pequeña proporción, aporta color y tanino extra.',
   'Syrah':'Tinta internacional, especiada (pimienta negra), cuerpo medio-alto.',
   'Pinot Noir':'Tinta delicada, poco tánica, fruta roja fresca, muy sensible al clima.',
   'Malbec':'Tinta de origen francés, hoy asociada a Argentina. Color intenso, fruta negra madura.',
+  'Nebbiolo':'Tinta italiana (Barolo, Barbaresco). Taninos muy altos, notas de rosa, cereza y alquitrán.',
+  'Sangiovese':'Tinta italiana (Chianti). Acidez alta, cereza y notas herbáceas.',
   'Chardonnay':'Blanca internacional, versátil: cítrica en frío, untuosa y tostada si pasa por barrica.',
   'Sauvignon Blanc':'Blanca muy aromática, notas herbáceas y cítricas, acidez alta.',
   'Riesling':'Blanca alemana, gran acidez, desde muy seca a muy dulce, aromas florales y de petróleo con crianza.',
+  'Gewürztraminer':'Blanca muy aromática, lichi y rosas, a menudo con un punto de dulzor.',
+  'Chenin Blanc':'Blanca francesa muy versátil, desde muy seca a dulce, siempre con acidez alta.',
   'Viura':'Otro nombre de la Macabeo en Rioja. Blanca ligera, poco aromática.',
 };
 
@@ -466,6 +484,23 @@ const DEF_TERMINOS = {
     'Semi-seco':'Un toque de dulzor, apenas perceptible.',
     'Semi-dulce':'Dulzor claro pero no empalagoso.',
     'Dulce':'Azúcar residual alto, notorio desde el primer sorbo.',
+  },
+  estilo: {
+    'Afrutado':'Predomina la fruta fresca, poco o nada de paso por madera.',
+    'Equilibrado':'Entre fruta y untuosidad, ni muy fresco ni muy cremoso.',
+    'Cremoso':'Textura untuosa, casi mantecosa — suele venir de crianza en barrica o de las lías.',
+  },
+  acidez: {
+    'Baja':'Sensación blanda, poca frescura. Típico de climas muy cálidos o uvas muy maduras.',
+    'Media':'Frescura equilibrada, ni plano ni punzante.',
+    'Alta':'Sensación viva, hace salivar. Común en blancos fríos y tintos del norte.',
+    'Muy alta':'Frescura muy marcada, casi punzante. Típico de vinos jóvenes de climas fríos.',
+  },
+  persistencia: {
+    'Corta':'El sabor desaparece rápido después de tragar, en pocos segundos.',
+    'Media':'El sabor se mantiene un poco más, ni corto ni largo.',
+    'Larga':'El sabor persiste bastante tiempo en boca, típico de vinos con más estructura.',
+    'Muy larga':'El sabor se queda varios minutos — habitual en vinos complejos o de crianza larga.',
   },
   aromas: {
     'Fruta roja':'Fresa, frambuesa, cereza — típico de tintos ligeros y rosados.',
@@ -808,6 +843,9 @@ function cardHtml(w){
         ${w.uva?`<div class="row"><b>Uva:</b> ${escapeHtml(w.uva)}</div>`:''}
         ${w.taninos?`<div class="row"><b>Taninos:</b> ${w.taninos}</div>`:''}
         ${w.dulzor?`<div class="row"><b>Dulzor:</b> ${w.dulzor}</div>`:''}
+        ${w.estilo?`<div class="row"><b>Estilo:</b> ${w.estilo}</div>`:''}
+        ${w.acidez?`<div class="row"><b>Acidez:</b> ${w.acidez}</div>`:''}
+        ${w.persistencia?`<div class="row"><b>Persistencia:</b> ${w.persistencia}</div>`:''}
         ${w.repetir?`<div class="row"><b>¿Repetir?:</b> ${w.repetir}</div>`:''}
         ${w.notas?`<div class="row"><b>Notas:</b> ${escapeHtml(w.notas)}</div>`:''}
         <div class="row"><b>Fecha:</b> ${w.fecha||'-'}</div>
@@ -824,7 +862,7 @@ function cardHtml(w){
 }
 
 // ---------- FORM ----------
-let sel = { tipo:null, cuerpo:null, taninos:null, dulzor:null, aromas:[], uvas:[], repetir:null, quien:null };
+let sel = { tipo:null, cuerpo:null, taninos:null, dulzor:null, estilo:null, acidez:null, persistencia:null, aromas:[], uvas:[], repetir:null, quien:null };
 
 function buildChipset(containerId, options){
   const el = document.getElementById(containerId);
@@ -865,6 +903,9 @@ function initForm(){
   buildChipset('f_cuerpo', CUERPO); attachSingleSelect('f_cuerpo','cuerpo', DEF_TERMINOS.cuerpo);
   buildChipset('f_taninos', TANINOS); attachSingleSelect('f_taninos','taninos', DEF_TERMINOS.taninos);
   buildChipset('f_dulzor', DULZOR); attachSingleSelect('f_dulzor','dulzor', DEF_TERMINOS.dulzor);
+  buildChipset('f_estilo', ESTILO); attachSingleSelect('f_estilo','estilo', DEF_TERMINOS.estilo);
+  buildChipset('f_acidez', ACIDEZ); attachSingleSelect('f_acidez','acidez', DEF_TERMINOS.acidez);
+  buildChipset('f_persistencia', PERSISTENCIA); attachSingleSelect('f_persistencia','persistencia', DEF_TERMINOS.persistencia);
   buildChipset('f_aromas', AROMAS); attachMultiSelect('f_aromas','aromas', DEF_TERMINOS.aromas);
   buildChipset('f_repetir', REPETIR); attachSingleSelect('f_repetir','repetir');
   buildChipset('f_quien', QUIEN); attachSingleSelect('f_quien','quien');
@@ -873,7 +914,7 @@ function initForm(){
   });
 }
 function resetForm(){
-  sel = { tipo:null, cuerpo:null, taninos:null, dulzor:null, aromas:[], uvas:[], repetir:null, quien:null };
+  sel = { tipo:null, cuerpo:null, taninos:null, dulzor:null, estilo:null, acidez:null, persistencia:null, aromas:[], uvas:[], repetir:null, quien:null };
   ['f_nombre','f_bodega','f_anada','f_precio','f_do','f_uva_otra','f_notas'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('f_score').value = 7;
   document.getElementById('f_score_display').textContent = '7.0';
@@ -899,7 +940,7 @@ function openSheet(wine){
     document.getElementById('f_score_display').textContent = parseFloat(wine.score||7).toFixed(1);
     document.getElementById('f_fecha').value = wine.fecha || new Date().toISOString().slice(0,10);
     sel.tipo = wine.tipo; sel.cuerpo = wine.cuerpo; sel.taninos = wine.taninos;
-    sel.dulzor = wine.dulzor; sel.aromas = (wine.aromas||[]).slice(); sel.repetir = wine.repetir; sel.quien = wine.quien;
+    sel.dulzor = wine.dulzor; sel.estilo = wine.estilo; sel.acidez = wine.acidez; sel.persistencia = wine.persistencia; sel.aromas = (wine.aromas||[]).slice(); sel.repetir = wine.repetir; sel.quien = wine.quien;
     const uvasGuardadas = (wine.uva||'').split(',').map(s=>s.trim()).filter(Boolean);
     sel.uvas = uvasGuardadas.filter(u=>UVAS.some(x=>x.toLowerCase()===u.toLowerCase()))
                             .map(u=>UVAS.find(x=>x.toLowerCase()===u.toLowerCase()));
@@ -910,6 +951,9 @@ function openSheet(wine){
     document.querySelectorAll('#f_cuerpo .chip-opt').forEach(x=>x.classList.toggle('sel', x.dataset.val===sel.cuerpo));
     document.querySelectorAll('#f_taninos .chip-opt').forEach(x=>x.classList.toggle('sel', x.dataset.val===sel.taninos));
     document.querySelectorAll('#f_dulzor .chip-opt').forEach(x=>x.classList.toggle('sel', x.dataset.val===sel.dulzor));
+    document.querySelectorAll('#f_estilo .chip-opt').forEach(x=>x.classList.toggle('sel', x.dataset.val===sel.estilo));
+    document.querySelectorAll('#f_acidez .chip-opt').forEach(x=>x.classList.toggle('sel', x.dataset.val===sel.acidez));
+    document.querySelectorAll('#f_persistencia .chip-opt').forEach(x=>x.classList.toggle('sel', x.dataset.val===sel.persistencia));
     document.querySelectorAll('#f_aromas .chip-opt').forEach(x=>x.classList.toggle('sel', sel.aromas.includes(x.dataset.val)));
     document.querySelectorAll('#f_repetir .chip-opt').forEach(x=>x.classList.toggle('sel', x.dataset.val===sel.repetir));
     document.querySelectorAll('#f_quien .chip-opt').forEach(x=>x.classList.toggle('sel', x.dataset.val===sel.quien));
@@ -938,7 +982,7 @@ async function handleSave(){
     score: parseFloat(document.getElementById('f_score').value),
     fecha: document.getElementById('f_fecha').value,
     tipo: sel.tipo, cuerpo: sel.cuerpo, taninos: sel.taninos,
-    dulzor: sel.dulzor, aromas: sel.aromas.slice(), repetir: sel.repetir, quien: sel.quien,
+    dulzor: sel.dulzor, estilo: sel.estilo, acidez: sel.acidez, persistencia: sel.persistencia, aromas: sel.aromas.slice(), repetir: sel.repetir, quien: sel.quien,
     foto: fotoBase64 || null,
   };
   const btn = document.getElementById('btnSave');
