@@ -236,6 +236,28 @@
   .login-tab{flex:1;text-align:center;padding:8px;border-radius:8px;font-size:13px;font-weight:600;color:var(--ink-soft);cursor:pointer;}
   .login-tab.active{background:var(--wine);color:#fff;}
   .login-error{color:var(--danger);font-size:12.5px;margin-top:10px;min-height:16px;text-align:center;}
+  .info-btn{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:16px;height:16px;border-radius:50%;border:1px solid var(--gold);
+    background:none;color:var(--gold);font-size:11px;line-height:1;cursor:pointer;
+    vertical-align:middle;margin-left:4px;padding:0;
+  }
+  .def-toast{
+    position:fixed;left:50%;bottom:90px;transform:translateX(-50%) translateY(10px);
+    background:var(--ink);color:var(--paper-card);padding:10px 16px;border-radius:10px;
+    font-size:12.5px;max-width:300px;text-align:center;opacity:0;pointer-events:none;
+    transition:opacity .25s ease, transform .25s ease;z-index:100;line-height:1.4;
+  }
+  .def-toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  .gusto-btn{
+    background:none;border:1px solid var(--gold);color:var(--slate);
+    font-size:12px;padding:6px 14px;border-radius:20px;cursor:pointer;font-weight:500;
+  }
+  .gusto-panel{
+    max-width:420px;margin:12px auto 0;background:var(--paper-card);border-radius:12px;
+    padding:14px 16px;font-size:13.5px;color:var(--ink-soft);line-height:1.5;text-align:left;
+  }
+  .gusto-panel b{color:var(--wine);}
 </style>
 </head>
 <body>
@@ -287,15 +309,20 @@
     <h1>Nuestra Bodega</h1>
     <div class="session-row">
       <span id="sessionEmail"></span>
+      <button id="btnBackup">Descargar copia</button>
       <button id="btnLogout">Cerrar sesión</button>
     </div>
     <div class="stats" id="statsRow"></div>
     <div id="rankingRow"></div>
+    <div style="text-align:center;margin-top:10px;">
+      <button class="gusto-btn" id="btnGusto" style="display:none;">Ver nuestro gusto</button>
+    </div>
+    <div class="gusto-panel" id="gustoPanel" style="display:none;"></div>
   </header>
 
   <div class="toolbar">
     <div class="search-row">
-      <input type="text" id="searchInput" placeholder="Buscar por nombre o bodega...">
+      <input type="text" id="searchInput" placeholder="Buscar por nombre, bodega, uva o DO...">
       <select id="sortSelect">
         <option value="fecha_desc">Más reciente</option>
         <option value="score_desc">Mejor puntuados</option>
@@ -392,6 +419,86 @@ const TANINOS = ['Suaves','Medios','Firmes','Marcados','N/A'];
 const DULZOR = ['Seco','Semi-seco','Semi-dulce','Dulce'];
 const AROMAS = ['Fruta roja','Fruta negra','Fruta madura','Cítrico','Floral','Especiado','Herbáceo','Mineral','Madera','Tostado','Vainilla','Ahumado','Balsámico','Cuero/animal'];
 const UVAS = ['Tempranillo','Garnacha','Monastrell','Bobal','Mencía','Graciano','Cariñena','Albariño','Verdejo','Godello','Macabeo','Xarel·lo','Parellada','Moscatel','Cabernet Sauvignon','Merlot','Syrah','Pinot Noir','Malbec','Chardonnay','Sauvignon Blanc','Riesling','Viura'];
+
+const DEF_UVAS = {
+  'Tempranillo':'La uva tinta más plantada de España. Fruta roja, poco ácida, base de Rioja y Ribera del Duero.',
+  'Garnacha':'Tinta, aromática, cuerpo medio y buena acidez. Da vinos afrutados, a veces especiados.',
+  'Monastrell':'Tinta mediterránea (Jumilla, Yecla). Mucho color, cuerpo y grado; fruta muy madura.',
+  'Bobal':'Tinta valenciana (Utiel-Requena). Color intenso, taninos marcados, poco conocida fuera de España.',
+  'Mencía':'Tinta gallega/leonesa (Bierzo, Ribeira Sacra). Ligera, floral, poco tánica.',
+  'Graciano':'Tinta minoritaria de Rioja. Mucho color y acidez, se usa casi siempre en coupage.',
+  'Cariñena':'Tinta de cuerpo y taninos firmes, muy ligada al Priorat y Montsant.',
+  'Albariño':'Blanca gallega (Rías Baixas). Cítrica, salina, muy aromática.',
+  'Verdejo':'Blanca de Rueda. Notas de hinojo y hierba fresca, acidez media.',
+  'Godello':'Blanca gallega, más untuosa que el Albariño, con notas minerales.',
+  'Macabeo':'Blanca mediterránea, base del cava junto a Xarel·lo y Parellada.',
+  'Xarel·lo':'Blanca catalana, estructura y acidez, clave en el cava.',
+  'Parellada':'Blanca catalana, más suave y floral, aporta finura al cava.',
+  'Moscatel':'Blanca muy aromática, a menudo dulce o semidulce, notas de uva de mesa y flores.',
+  'Cabernet Sauvignon':'Tinta internacional. Taninos firmes, notas de grosella negra y pimiento verde.',
+  'Merlot':'Tinta internacional, más suave que el Cabernet, ciruela y taninos redondos.',
+  'Syrah':'Tinta internacional, especiada (pimienta negra), cuerpo medio-alto.',
+  'Pinot Noir':'Tinta delicada, poco tánica, fruta roja fresca, muy sensible al clima.',
+  'Malbec':'Tinta de origen francés, hoy asociada a Argentina. Color intenso, fruta negra madura.',
+  'Chardonnay':'Blanca internacional, versátil: cítrica en frío, untuosa y tostada si pasa por barrica.',
+  'Sauvignon Blanc':'Blanca muy aromática, notas herbáceas y cítricas, acidez alta.',
+  'Riesling':'Blanca alemana, gran acidez, desde muy seca a muy dulce, aromas florales y de petróleo con crianza.',
+  'Viura':'Otro nombre de la Macabeo en Rioja. Blanca ligera, poco aromática.',
+};
+
+const DEF_TERMINOS = {
+  cuerpo: {
+    'Ligero':'Textura fina, poco peso en boca. Típico de blancos o tintos jóvenes.',
+    'Medio-ligero':'Entre ligero y medio, aún fresco pero con algo más de presencia.',
+    'Medio':'Peso equilibrado, ni ligero ni denso. La mayoría de tintos jóvenes están aquí.',
+    'Con cuerpo':'Sensación densa, casi untuosa. Suele venir de más grado o crianza en barrica.',
+    'Muy potente':'Máxima densidad y concentración, satura la boca. Típico de tintos de climas cálidos.',
+  },
+  taninos: {
+    'Suaves':'Apenas se notan, tacto sedoso. Vinos jóvenes o de uvas poco tánicas.',
+    'Medios':'Se perciben pero no dominan, equilibrados con el resto.',
+    'Firmes':'Marcan la boca de forma clara, dan estructura.',
+    'Marcados':'Sensación áspera o de sequedad fuerte en encías y lengua.',
+    'N/A':'No aplica — normal en blancos, rosados y espumosos, que casi no tienen taninos.',
+  },
+  dulzor: {
+    'Seco':'Sin azúcar residual perceptible. La mayoría de los vinos de mesa son secos.',
+    'Semi-seco':'Un toque de dulzor, apenas perceptible.',
+    'Semi-dulce':'Dulzor claro pero no empalagoso.',
+    'Dulce':'Azúcar residual alto, notorio desde el primer sorbo.',
+  },
+  aromas: {
+    'Fruta roja':'Fresa, frambuesa, cereza — típico de tintos ligeros y rosados.',
+    'Fruta negra':'Mora, arándano, ciruela negra — tintos de más cuerpo.',
+    'Fruta madura':'Fruta casi pasificada, mermelada — climas cálidos o vendimias tardías.',
+    'Cítrico':'Limón, pomelo — frescor típico de blancos jóvenes.',
+    'Floral':'Flores blancas o violeta, según la uva.',
+    'Especiado':'Pimienta, clavo, canela — a menudo viene de la barrica o de uvas como Syrah.',
+    'Herbáceo':'Hierba cortada, monte bajo, pimiento verde.',
+    'Mineral':'Piedra de sílex, tiza — habitual en blancos de suelos pobres.',
+    'Madera':'Aroma a roble, vainilla o tostado — viene de la crianza en barrica.',
+    'Tostado':'Café, cacao, pan tostado — de barricas más tostadas.',
+    'Vainilla':'Dulce y cremoso, típico de barrica americana.',
+    'Ahumado':'Humo, brasa — poco común, suele venir de crianza o de la uva misma.',
+    'Balsámico':'Eucalipto, menta, resina — a menudo en tintos de crianza larga.',
+    'Cuero/animal':'Notas de cuero, establo — típico de vinos con años de botella.',
+  },
+};
+
+let toastTimer = null;
+function mostrarToast(texto){
+  let el = document.getElementById('defToast');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'defToast';
+    el.className = 'def-toast';
+    document.body.appendChild(el);
+  }
+  el.textContent = texto;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>el.classList.remove('show'), 3200);
+}
 const REPETIR = ['Sí','No','Tal vez'];
 const QUIEN = [{v:'Marc', c:'var(--wine)'},{v:'Amaia', c:'var(--gold)'},{v:'Ambos', c:'var(--slate)'}];
 
@@ -491,6 +598,20 @@ function traducirErrorAuth(code){
 
 document.getElementById('btnLogout').addEventListener('click', ()=> auth.signOut());
 
+document.getElementById('btnBackup').addEventListener('click', ()=>{
+  if(wines.length===0){ alert('Todavía no hay vinos que exportar.'); return; }
+  const data = JSON.stringify(wines, null, 2);
+  const blob = new Blob([data], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'bodega-backup-' + new Date().toISOString().slice(0,10) + '.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+});
+
 auth.onAuthStateChanged(user=>{
   if(user){
     document.getElementById('loginWrap').style.display='none';
@@ -532,6 +653,46 @@ function renderStats(){
   `;
 }
 
+function moda(arr){
+  if(arr.length===0) return null;
+  const counts={};
+  arr.forEach(v=>counts[v]=(counts[v]||0)+1);
+  return Object.entries(counts).sort((a,b)=>b[1]-a[1])[0][0];
+}
+
+function calcularResumenGusto(){
+  const favoritos = wines.filter(w=>w.score>=7.5);
+  if(favoritos.length<3) return null;
+  const cuerpoModa = moda(favoritos.map(w=>w.cuerpo).filter(Boolean));
+  const dulzorModa = moda(favoritos.map(w=>w.dulzor).filter(Boolean));
+  const aromaCounts = {};
+  favoritos.forEach(w=>(w.aromas||[]).forEach(a=>aromaCounts[a]=(aromaCounts[a]||0)+1));
+  const topAromas = Object.entries(aromaCounts).sort((a,b)=>b[1]-a[1]).slice(0,3).map(e=>e[0]);
+  const uvaCounts = {};
+  favoritos.forEach(w=>(w.uva||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(u=>uvaCounts[u]=(uvaCounts[u]||0)+1));
+  const topUvaEntry = Object.entries(uvaCounts).sort((a,b)=>b[1]-a[1])[0];
+  return { cuerpoModa, dulzorModa, topAromas, topUva: topUvaEntry?topUvaEntry[0]:null, n:favoritos.length };
+}
+
+function renderGustoBoton(){
+  document.getElementById('btnGusto').style.display = wines.length>=3 ? 'inline-block' : 'none';
+}
+
+document.getElementById('btnGusto').addEventListener('click', ()=>{
+  const panel = document.getElementById('gustoPanel');
+  if(panel.style.display==='block'){ panel.style.display='none'; return; }
+  const r = calcularResumenGusto();
+  if(!r){
+    panel.innerHTML = '<p>Cata al menos 3 vinos con nota 7,5 o más para ver el resumen.</p>';
+  }else{
+    let texto = `Con ${r.n} vinos bien puntuados: preferís cuerpo <b>${r.cuerpoModa||'variado'}</b>, dulzor <b>${r.dulzorModa||'variado'}</b>`;
+    if(r.topUva) texto += `, y la uva que más repite es <b>${escapeHtml(r.topUva)}</b>`;
+    texto += r.topAromas.length ? `. Los aromas que más aparecen: <b>${r.topAromas.join(', ')}</b>.` : '.';
+    panel.innerHTML = `<p>${texto}</p>`;
+  }
+  panel.style.display = 'block';
+});
+
 function renderRanking(){
   const el = document.getElementById('rankingRow');
   if(wines.length<2){ el.innerHTML=''; return; }
@@ -554,7 +715,7 @@ function getFilteredSorted(){
   const sort = document.getElementById('sortSelect').value;
   let list = wines.filter(w=>{
     if(activeTipoFilter!=='todos' && w.tipo!==activeTipoFilter) return false;
-    if(q && !(`${w.nombre} ${w.bodega}`.toLowerCase().includes(q))) return false;
+    if(q && !(`${w.nombre} ${w.bodega} ${w.uva||''} ${w.do||''}`.toLowerCase().includes(q))) return false;
     return true;
   });
   list.sort((a,b)=>{
@@ -569,6 +730,7 @@ function getFilteredSorted(){
 function render(){
   renderStats();
   renderRanking();
+  renderGustoBoton();
   renderFilterChips();
   const list = getFilteredSorted();
   const container = document.getElementById('listContainer');
@@ -594,6 +756,17 @@ function render(){
       }
     });
   });
+}
+
+function vinosParecidos(wine){
+  const misUvas = (wine.uva||'').split(',').map(s=>s.trim().toLowerCase()).filter(Boolean);
+  return wines.filter(w=>{
+    if(w.id===wine.id) return false;
+    const susUvas = (w.uva||'').split(',').map(s=>s.trim().toLowerCase()).filter(Boolean);
+    const compartenUva = misUvas.some(u=>susUvas.includes(u));
+    const compartenDo = wine.do && w.do && wine.do.trim().toLowerCase()===w.do.trim().toLowerCase();
+    return compartenUva || compartenDo;
+  }).sort((a,b)=>b.score-a.score).slice(0,3);
 }
 
 function cardHtml(w){
@@ -638,6 +811,13 @@ function cardHtml(w){
         ${w.repetir?`<div class="row"><b>¿Repetir?:</b> ${w.repetir}</div>`:''}
         ${w.notas?`<div class="row"><b>Notas:</b> ${escapeHtml(w.notas)}</div>`:''}
         <div class="row"><b>Fecha:</b> ${w.fecha||'-'}</div>
+        ${(()=>{
+          const parecidos = vinosParecidos(w);
+          if(parecidos.length===0) return '';
+          return `<div class="row" style="margin-top:8px;"><b>Vinos parecidos:</b><br>`+
+            parecidos.map(p=>`${escapeHtml(p.nombre)} — ${parseFloat(p.score).toFixed(1)}`).join('<br>')+
+            `</div>`;
+        })()}
       </div>
     </div>
   </div>`;
@@ -661,29 +841,31 @@ function buildTipoSeg(){
     el.querySelectorAll('.tipo-opt').forEach(x=>x.style.opacity = x.dataset.val===sel.tipo ? '1' : '0.4');
   }));
 }
-function attachSingleSelect(containerId, key){
+function attachSingleSelect(containerId, key, defDict){
   const el = document.getElementById(containerId);
   el.querySelectorAll('.chip-opt').forEach(o=>o.addEventListener('click', ()=>{
     sel[key] = o.dataset.val;
     el.querySelectorAll('.chip-opt').forEach(x=>x.classList.toggle('sel', x.dataset.val===sel[key]));
+    if(defDict && defDict[o.dataset.val]) mostrarToast(o.dataset.val+': '+defDict[o.dataset.val]);
   }));
 }
-function attachMultiSelect(containerId, key){
+function attachMultiSelect(containerId, key, defDict){
   const el = document.getElementById(containerId);
   el.querySelectorAll('.chip-opt').forEach(o=>o.addEventListener('click', ()=>{
     const v = o.dataset.val;
     const idx = sel[key].indexOf(v);
     if(idx>-1) sel[key].splice(idx,1); else sel[key].push(v);
     o.classList.toggle('sel', sel[key].includes(v));
+    if(defDict && defDict[v]) mostrarToast(v+': '+defDict[v]);
   }));
 }
 function initForm(){
   buildTipoSeg();
-  buildChipset('f_uva_chips', UVAS); attachMultiSelect('f_uva_chips','uvas');
-  buildChipset('f_cuerpo', CUERPO); attachSingleSelect('f_cuerpo','cuerpo');
-  buildChipset('f_taninos', TANINOS); attachSingleSelect('f_taninos','taninos');
-  buildChipset('f_dulzor', DULZOR); attachSingleSelect('f_dulzor','dulzor');
-  buildChipset('f_aromas', AROMAS); attachMultiSelect('f_aromas','aromas');
+  buildChipset('f_uva_chips', UVAS); attachMultiSelect('f_uva_chips','uvas', DEF_UVAS);
+  buildChipset('f_cuerpo', CUERPO); attachSingleSelect('f_cuerpo','cuerpo', DEF_TERMINOS.cuerpo);
+  buildChipset('f_taninos', TANINOS); attachSingleSelect('f_taninos','taninos', DEF_TERMINOS.taninos);
+  buildChipset('f_dulzor', DULZOR); attachSingleSelect('f_dulzor','dulzor', DEF_TERMINOS.dulzor);
+  buildChipset('f_aromas', AROMAS); attachMultiSelect('f_aromas','aromas', DEF_TERMINOS.aromas);
   buildChipset('f_repetir', REPETIR); attachSingleSelect('f_repetir','repetir');
   buildChipset('f_quien', QUIEN); attachSingleSelect('f_quien','quien');
   document.getElementById('f_score').addEventListener('input', (e)=>{
