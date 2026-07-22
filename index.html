@@ -16,6 +16,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
     --paper:#EFE6D8;
@@ -309,9 +310,11 @@
     <h1>Nuestra Bodega</h1>
     <div class="session-row">
       <span id="sessionEmail"></span>
+      <button id="btnImport">Importar</button>
       <button id="btnBackup">Descargar copia</button>
       <button id="btnLogout">Cerrar sesión</button>
     </div>
+    <input type="file" id="fileImport" accept=".xlsx,.xls,.csv" style="display:none;">
     <div class="stats" id="statsRow"></div>
     <div id="rankingRow"></div>
     <div style="text-align:center;margin-top:10px;">
@@ -586,6 +589,8 @@ document.getElementById('btnQuitarFoto').addEventListener('click', ()=>{
 function tipoColor(t){ return (TIPOS.find(x=>x.v===t)||{}).c || 'var(--slate)'; }
 function tipoLabel(t){ return (TIPOS.find(x=>x.v===t)||{}).l || t; }
 function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+function scoreNum(w){ const n = parseFloat(w.score); return isNaN(n) ? null : n; }
+function scoreDisplay(w){ const n = scoreNum(w); return n===null ? '–' : n.toFixed(1); }
 
 // ---------- AUTH ----------
 let loginMode = 'login';
@@ -633,6 +638,102 @@ function traducirErrorAuth(code){
 
 document.getElementById('btnLogout').addEventListener('click', ()=> auth.signOut());
 
+function normalizeKey(k){
+  return k.toString().trim().toLowerCase()
+    .replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u').replace(/ñ/g,'n');
+}
+
+function excelDateToStr(v){
+  if(v instanceof Date && !isNaN(v)) return v.toISOString().slice(0,10);
+  if(typeof v === 'number' && window.XLSX && XLSX.SSF){
+    const d = XLSX.SSF.parse_date_code(v);
+    if(d) return `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;
+  }
+  return (v==null) ? '' : String(v).trim();
+}
+
+async function importarArchivo(file){
+  let wbXlsx;
+  try{
+    const buf = await file.arrayBuffer();
+    wbXlsx = XLSX.read(buf, {type:'array', cellDates:true});
+  }catch(e){
+    alert('No se ha podido leer el archivo. ¿Es un Excel o CSV válido?');
+    return;
+  }
+  const sheet = wbXlsx.Sheets[wbXlsx.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(sheet, {defval:''});
+  if(rows.length===0){ alert('El archivo no tiene filas de datos.'); return; }
+
+  const nuevos = [];
+  rows.forEach(row=>{
+    const obj = {};
+    Object.keys(row).forEach(k=>{ obj[normalizeKey(k)] = row[k]; });
+    const nombre = (obj['nombre']||'').toString().trim();
+    if(!nombre) return;
+
+    const tipoRaw = normalizeKey(obj['tipo']||'');
+    const tipoFinal = TIPOS.some(t=>t.v===tipoRaw) ? tipoRaw : '';
+
+    const aromasRaw = (obj['aromas']||'').toString().split(',').map(s=>s.trim()).filter(Boolean);
+    const aromasFinal = aromasRaw.map(a=>AROMAS.find(x=>x.toLowerCase()===a.toLowerCase())||a);
+
+    const puntuacionRaw = obj['puntuacion'];
+    const scoreFinal = (puntuacionRaw!=='' && puntuacionRaw!=null && !isNaN(parseFloat(puntuacionRaw)))
+      ? parseFloat(puntuacionRaw) : null;
+
+    nuevos.push({
+      nombre,
+      bodega: (obj['bodega']||'').toString().trim(),
+      anada: (obj['anada']||'').toString().trim(),
+      do: (obj['do']||obj['region']||'').toString().trim(),
+      uva: (obj['uva']||'').toString().trim(),
+      tipo: tipoFinal,
+      precio: (obj['precio']!=='' && obj['precio']!=null) ? String(obj['precio']) : '',
+      score: scoreFinal,
+      cuerpo: (obj['cuerpo']||'').toString().trim(),
+      taninos: (obj['taninos']||'').toString().trim(),
+      dulzor: (obj['dulzor']||'').toString().trim(),
+      estilo: (obj['estilo']||'').toString().trim(),
+      acidez: (obj['acidez']||'').toString().trim(),
+      persistencia: (obj['persistencia']||'').toString().trim(),
+      aromas: aromasFinal,
+      repetir: (obj['repetir']||'').toString().trim(),
+      quien: (obj['quien']||'').toString().trim(),
+      fecha: excelDateToStr(obj['fecha']),
+      notas: (obj['notas']||'').toString().trim(),
+      foto: null,
+    });
+  });
+
+  if(nuevos.length===0){ alert('No se ha encontrado ninguna fila válida (falta el nombre en todas).'); return; }
+  if(!confirm(`Se van a importar ${nuevos.length} vino(s) nuevo(s). ¿Continuar?`)) return;
+
+  try{
+    const CHUNK = 400;
+    for(let i=0; i<nuevos.length; i+=CHUNK){
+      const chunk = nuevos.slice(i, i+CHUNK);
+      const batch = db.batch();
+      chunk.forEach(w=>{
+        const ref = db.collection('vinos').doc();
+        batch.set(ref, w);
+      });
+      await batch.commit();
+    }
+    alert(`Importados ${nuevos.length} vino(s) correctamente.`);
+  }catch(e){
+    console.error(e);
+    alert('Error al importar: ' + (e.message || e.code || 'desconocido'));
+  }
+}
+
+document.getElementById('btnImport').addEventListener('click', ()=>document.getElementById('fileImport').click());
+document.getElementById('fileImport').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(file) importarArchivo(file);
+  e.target.value = '';
+});
+
 document.getElementById('btnBackup').addEventListener('click', ()=>{
   if(wines.length===0){ alert('Todavía no hay vinos que exportar.'); return; }
   const data = JSON.stringify(wines, null, 2);
@@ -679,12 +780,13 @@ function startListening(){
 function renderStats(){
   const el = document.getElementById('statsRow');
   if(wines.length===0){ el.innerHTML=''; return; }
-  const avg = (wines.reduce((s,w)=>s+parseFloat(w.score||0),0)/wines.length).toFixed(1);
-  const fav = wines.slice().sort((a,b)=>b.score-a.score)[0];
+  const puntuados = wines.filter(w=>scoreNum(w)!==null);
+  const avg = puntuados.length ? (puntuados.reduce((s,w)=>s+scoreNum(w),0)/puntuados.length).toFixed(1) : '–';
+  const fav = puntuados.length ? puntuados.slice().sort((a,b)=>scoreNum(b)-scoreNum(a))[0] : null;
   el.innerHTML = `
     <div class="stat"><div class="n">${wines.length}</div><div class="l">Vinos</div></div>
     <div class="stat"><div class="n">${avg}</div><div class="l">Media</div></div>
-    <div class="stat"><div class="n">${fav.score}</div><div class="l">Favorito</div></div>
+    <div class="stat"><div class="n">${fav?scoreDisplay(fav):'–'}</div><div class="l">Favorito</div></div>
   `;
 }
 
@@ -696,7 +798,7 @@ function moda(arr){
 }
 
 function calcularResumenGusto(){
-  const favoritos = wines.filter(w=>w.score>=7.5);
+  const favoritos = wines.filter(w=>(scoreNum(w)??0)>=7.5);
   if(favoritos.length<3) return null;
   const cuerpoModa = moda(favoritos.map(w=>w.cuerpo).filter(Boolean));
   const dulzorModa = moda(favoritos.map(w=>w.dulzor).filter(Boolean));
@@ -730,11 +832,12 @@ document.getElementById('btnGusto').addEventListener('click', ()=>{
 
 function renderRanking(){
   const el = document.getElementById('rankingRow');
-  if(wines.length<2){ el.innerHTML=''; return; }
-  const top = wines.slice().sort((a,b)=>b.score-a.score).slice(0,3);
+  const puntuados = wines.filter(w=>scoreNum(w)!==null);
+  if(puntuados.length<2){ el.innerHTML=''; return; }
+  const top = puntuados.slice().sort((a,b)=>scoreNum(b)-scoreNum(a)).slice(0,3);
   const medals=['🥇','🥈','🥉'];
   el.innerHTML = '<div class="ranking-title">Top puntuados</div><div class="ranking-list">'+
-    top.map((w,i)=>`<div class="ranking-item">${medals[i]||''}<span class="rn">${escapeHtml(w.nombre)}</span><span class="rs">${parseFloat(w.score).toFixed(1)}</span></div>`).join('')+
+    top.map((w,i)=>`<div class="ranking-item">${medals[i]||''}<span class="rn">${escapeHtml(w.nombre)}</span><span class="rs">${scoreDisplay(w)}</span></div>`).join('')+
     '</div>';
 }
 
@@ -754,8 +857,8 @@ function getFilteredSorted(){
     return true;
   });
   list.sort((a,b)=>{
-    if(sort==='score_desc') return b.score-a.score;
-    if(sort==='score_asc') return a.score-b.score;
+    if(sort==='score_desc') return (scoreNum(b)??-Infinity)-(scoreNum(a)??-Infinity);
+    if(sort==='score_asc') return (scoreNum(a)??Infinity)-(scoreNum(b)??Infinity);
     if(sort==='nombre') return a.nombre.localeCompare(b.nombre);
     return new Date(b.fecha)-new Date(a.fecha);
   });
@@ -801,7 +904,7 @@ function vinosParecidos(wine){
     const compartenUva = misUvas.some(u=>susUvas.includes(u));
     const compartenDo = wine.do && w.do && wine.do.trim().toLowerCase()===w.do.trim().toLowerCase();
     return compartenUva || compartenDo;
-  }).sort((a,b)=>b.score-a.score).slice(0,3);
+  }).sort((a,b)=>(scoreNum(b)??-Infinity)-(scoreNum(a)??-Infinity)).slice(0,3);
 }
 
 function cardHtml(w){
@@ -812,7 +915,7 @@ function cardHtml(w){
     <div class="capsule" style="background:${tipoColor(w.tipo)}"></div>
     <div class="perforation"></div>
     <div class="card-body">
-      <div class="seal">${parseFloat(w.score).toFixed(1)}</div>
+      <div class="seal">${scoreDisplay(w)}</div>
       <div class="top-row">
         ${w.foto?`<img class="foto-thumb" src="${w.foto}">`:''}
         <div class="card-title-row">
@@ -853,7 +956,7 @@ function cardHtml(w){
           const parecidos = vinosParecidos(w);
           if(parecidos.length===0) return '';
           return `<div class="row" style="margin-top:8px;"><b>Vinos parecidos:</b><br>`+
-            parecidos.map(p=>`${escapeHtml(p.nombre)} — ${parseFloat(p.score).toFixed(1)}`).join('<br>')+
+            parecidos.map(p=>`${escapeHtml(p.nombre)} — ${scoreDisplay(p)}`).join('<br>')+
             `</div>`;
         })()}
       </div>
