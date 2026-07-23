@@ -277,6 +277,32 @@
   }
   .suggest-item{padding:8px 12px;font-size:13px;color:var(--ink);cursor:pointer;}
   .suggest-item:hover{background:var(--paper);}
+
+  .bodega-tabs{display:flex;gap:6px;margin-top:14px;background:var(--paper-card);border-radius:10px;padding:4px;}
+  .bodega-tab{flex:1;text-align:center;padding:8px 6px;border-radius:8px;font-size:12.5px;font-weight:600;color:var(--ink-soft);cursor:pointer;}
+  .bodega-tab.active{background:var(--wine);color:#fff;}
+  .bodega-tab .n{opacity:0.75;font-weight:500;}
+
+  .filtros-row{display:flex;justify-content:flex-end;}
+  .btn-filtros{
+    border:1px solid var(--paper-dark);background:var(--paper-card);color:var(--ink-soft);
+    font-size:12px;font-weight:600;padding:6px 13px;border-radius:20px;cursor:pointer;
+    display:flex;align-items:center;gap:6px;
+  }
+  .btn-filtros.hay-filtros{border-color:var(--wine);color:var(--wine);}
+  .filtros-badge{
+    background:var(--wine);color:#fff;font-size:10.5px;font-weight:700;border-radius:10px;
+    padding:1px 6px;min-width:14px;text-align:center;
+  }
+  .filter-panel{
+    background:var(--paper-card);border-radius:12px;padding:14px;margin-top:8px;
+  }
+  .filter-panel select{
+    width:100%;padding:9px 10px;border-radius:10px;border:1px solid var(--paper-dark);
+    background:var(--paper);font-family:'Inter',sans-serif;font-size:13.5px;color:var(--ink);
+  }
+  .filter-panel .field{margin-bottom:12px;}
+  .filter-panel .field:last-of-type{margin-bottom:0;}
 </style>
 </head>
 <body>
@@ -304,7 +330,6 @@
 <div class="login-wrap" id="loginWrap">
   <div class="login-card">
     <h1>Nuestra Bodega</h1>
-    <div class="sub">Marc &amp; Amaia</div>
     <div class="login-tabs">
       <div class="login-tab active" id="tabLogin">Iniciar sesión</div>
       <div class="login-tab" id="tabRegister">Crear cuenta</div>
@@ -333,6 +358,7 @@
       <button id="btnLogout">Cerrar sesión</button>
     </div>
     <input type="file" id="fileImport" accept=".xlsx,.xls,.csv" style="display:none;">
+    <div class="bodega-tabs" id="bodegaTabs" style="display:none;"></div>
     <div class="stats" id="statsRow"></div>
     <div id="rankingRow"></div>
     <div style="text-align:center;margin-top:10px;">
@@ -353,6 +379,24 @@
       </select>
     </div>
     <div class="filter-chips" id="filterChips"></div>
+    <div class="filtros-row">
+      <button class="btn-filtros" id="btnToggleFiltros">Filtros <span class="filtros-badge" id="filtrosBadge" style="display:none;"></span></button>
+    </div>
+    <div class="filter-panel" id="filterPanel" style="display:none;">
+      <div class="field">
+        <label>Región / DO</label>
+        <select id="filtroDO"></select>
+      </div>
+      <div class="field">
+        <label>País</label>
+        <select id="filtroPais"></select>
+      </div>
+      <div class="field">
+        <label>Precio</label>
+        <div class="filter-chips" id="filtroPrecioChips"></div>
+      </div>
+      <button class="btn ghost" id="btnLimpiarFiltros" style="width:100%;margin-top:4px;padding:9px;">Limpiar filtros</button>
+    </div>
   </div>
 
   <div id="listContainer"><div class="loading">Descorchando la colección...</div></div>
@@ -450,6 +494,17 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
+
+// ---------- PROPIETARIOS (bodegas separadas dentro de la misma base de datos) ----------
+// IMPORTANTE: pon aquí el/los email(s) con los que Pablo inicie sesión.
+// Cualquier otro email se trata como bodega de Marc & Amaia.
+const PABLO_EMAILS = ['p.bacete@lasanadas.es'];
+function propietarioDeEmail(email){
+  const e = (email||'').trim().toLowerCase();
+  return PABLO_EMAILS.map(x=>x.toLowerCase()).includes(e) ? 'Pablo' : 'MarcAmaia';
+}
+let propietarioActual = 'MarcAmaia'; // bodega del usuario logueado (dueño real de lo que crea/edita)
+let propietarioVista = 'MarcAmaia';  // bodega que se está viendo ahora (pestaña activa)
 
 // ---------- CONSTANTS ----------
 const TIPOS = [
@@ -578,13 +633,37 @@ function mostrarToast(texto){
   toastTimer = setTimeout(()=>el.classList.remove('show'), 3200);
 }
 const REPETIR = ['Sí','No','Tal vez'];
-const QUIEN = [{v:'Marc', c:'var(--wine)'},{v:'Amaia', c:'var(--gold)'},{v:'Ambos', c:'var(--slate)'}];
+const QUIEN_TODOS = [{v:'Marc', c:'var(--wine)'},{v:'Amaia', c:'var(--gold)'},{v:'Ambos', c:'var(--slate)'},{v:'Pablo', c:'var(--espumoso)'}];
+function opcionesQuien(){
+  return propietarioActual==='Pablo' ? [{v:'Pablo', c:'var(--espumoso)'}] : [{v:'Marc', c:'var(--wine)'},{v:'Amaia', c:'var(--gold)'},{v:'Ambos', c:'var(--slate)'}];
+}
 
 let wines = [];
 let editingId = null;
 let activeTipoFilter = 'todos';
+let activeDoFilter = 'todos';
+let activePaisFilter = 'todos';
+let activePrecioFilter = 'todos';
 let unsubscribe = null;
 let fotoBase64 = null;
+
+const PRECIO_BUCKETS = [
+  {v:'todos', l:'Todos'},
+  {v:'lt15', l:'< 15€'},
+  {v:'15-30', l:'15–30€'},
+  {v:'30-60', l:'30–60€'},
+  {v:'gt60', l:'+ 60€'},
+];
+function precioEnBucket(precio, bucket){
+  if(bucket==='todos') return true;
+  const p = parseFloat(precio);
+  if(isNaN(p)) return false;
+  if(bucket==='lt15') return p<15;
+  if(bucket==='15-30') return p>=15 && p<=30;
+  if(bucket==='30-60') return p>30 && p<=60;
+  if(bucket==='gt60') return p>60;
+  return true;
+}
 
 function comprimirImagen(file){
   return new Promise((resolve, reject)=>{
@@ -781,13 +860,14 @@ async function importarArchivo(file){
       fecha: excelDateToStr(obj['fecha']),
       notas: (obj['notas']||'').toString().trim(),
       foto: null,
+      propietario: propietarioActual,
     });
   });
 
   if(nuevos.length===0){ alert('No se ha encontrado ninguna fila válida (falta el nombre en todas).'); return; }
 
   const existentesPorClave = {};
-  wines.forEach(w=>{ existentesPorClave[claveVino(w)] = w; });
+  winesPropias().forEach(w=>{ existentesPorClave[claveVino(w)] = w; });
 
   const paraCrear = [];
   const paraFusionar = [];
@@ -852,10 +932,12 @@ document.getElementById('btnBackup').addEventListener('click', ()=>{
 
 auth.onAuthStateChanged(user=>{
   if(user){
+    propietarioActual = propietarioDeEmail(user.email);
+    propietarioVista = propietarioActual;
     document.getElementById('loginWrap').style.display='none';
     document.getElementById('appWrap').style.display='block';
-    document.getElementById('fabAdd').style.display='block';
     document.getElementById('sessionEmail').textContent = user.email;
+    renderBodegaTabs();
     startListening();
   }else{
     document.getElementById('loginWrap').style.display='flex';
@@ -866,11 +948,37 @@ auth.onAuthStateChanged(user=>{
   }
 });
 
+// ---------- PESTAÑAS DE BODEGA ----------
+function winesDeVista(){
+  return wines.filter(w=>(w.propietario||'MarcAmaia')===propietarioVista);
+}
+function winesPropias(){
+  return wines.filter(w=>(w.propietario||'MarcAmaia')===propietarioActual);
+}
+function renderBodegaTabs(){
+  const el = document.getElementById('bodegaTabs');
+  const otras = propietarioActual==='Pablo' ? 'MarcAmaia' : 'Pablo';
+  const nombreMia = propietarioActual==='Pablo' ? 'Mi bodega' : 'Nuestra bodega';
+  const nombreOtra = propietarioActual==='Pablo' ? 'Bodega de Marc & Amaia' : 'Bodega de Pablo';
+  const nMia = wines.filter(w=>(w.propietario||'MarcAmaia')===propietarioActual).length;
+  const nOtra = wines.filter(w=>(w.propietario||'MarcAmaia')===otras).length;
+  el.style.display = 'flex';
+  el.innerHTML = `
+    <div class="bodega-tab ${propietarioVista===propietarioActual?'active':''}" data-prop="${propietarioActual}">${nombreMia} <span class="n">(${nMia})</span></div>
+    <div class="bodega-tab ${propietarioVista===otras?'active':''}" data-prop="${otras}">${nombreOtra} <span class="n">(${nOtra})</span></div>
+  `;
+  el.querySelectorAll('.bodega-tab').forEach(t=>t.addEventListener('click', ()=>{
+    propietarioVista = t.dataset.prop;
+    render();
+  }));
+}
+
 // ---------- FIRESTORE LIVE SYNC ----------
 function startListening(){
   if(unsubscribe) return;
   unsubscribe = db.collection('vinos').onSnapshot(snap=>{
     wines = snap.docs.map(d=>({id:d.id, ...d.data()}));
+    renderBodegaTabs();
     render();
   }, err=>{
     document.getElementById('listContainer').innerHTML =
@@ -881,12 +989,13 @@ function startListening(){
 // ---------- RENDER ----------
 function renderStats(){
   const el = document.getElementById('statsRow');
-  if(wines.length===0){ el.innerHTML=''; return; }
-  const puntuados = wines.filter(w=>scoreNum(w)!==null);
+  const base = winesDeVista();
+  if(base.length===0){ el.innerHTML=''; return; }
+  const puntuados = base.filter(w=>scoreNum(w)!==null);
   const avg = puntuados.length ? (puntuados.reduce((s,w)=>s+scoreNum(w),0)/puntuados.length).toFixed(1) : '–';
   const fav = puntuados.length ? puntuados.slice().sort((a,b)=>scoreNum(b)-scoreNum(a))[0] : null;
   el.innerHTML = `
-    <div class="stat"><div class="n">${wines.length}</div><div class="l">Vinos</div></div>
+    <div class="stat"><div class="n">${base.length}</div><div class="l">Vinos</div></div>
     <div class="stat"><div class="n">${avg}</div><div class="l">Media</div></div>
     <div class="stat"><div class="n">${fav?scoreDisplay(fav):'–'}</div><div class="l">Favorito</div></div>
   `;
@@ -900,7 +1009,7 @@ function moda(arr){
 }
 
 function calcularResumenGusto(){
-  const favoritos = wines.filter(w=>(scoreNum(w)??0)>=7.5);
+  const favoritos = winesDeVista().filter(w=>(scoreNum(w)??0)>=7.5);
   if(favoritos.length<3) return null;
   const cuerpoModa = moda(favoritos.map(w=>w.cuerpo).filter(Boolean));
   const dulzorModa = moda(favoritos.map(w=>w.dulzor).filter(Boolean));
@@ -914,7 +1023,13 @@ function calcularResumenGusto(){
 }
 
 function renderGustoBoton(){
-  document.getElementById('btnGusto').style.display = wines.length>=3 ? 'inline-block' : 'none';
+  document.getElementById('btnGusto').style.display = winesDeVista().length>=3 ? 'inline-block' : 'none';
+  const btn = document.getElementById('btnGusto');
+  if(propietarioVista===propietarioActual){
+    btn.textContent = propietarioActual==='Pablo' ? 'Ver mi gusto' : 'Ver nuestro gusto';
+  }else{
+    btn.textContent = propietarioVista==='Pablo' ? 'Ver el gusto de Pablo' : 'Ver el gusto de Marc y Amaia';
+  }
 }
 
 document.getElementById('btnGusto').addEventListener('click', ()=>{
@@ -924,7 +1039,8 @@ document.getElementById('btnGusto').addEventListener('click', ()=>{
   if(!r){
     panel.innerHTML = '<p>Cata al menos 3 vinos con nota 7,5 o más para ver el resumen.</p>';
   }else{
-    let texto = `Con ${r.n} vinos bien puntuados: preferís cuerpo <b>${r.cuerpoModa||'variado'}</b>, dulzor <b>${r.dulzorModa||'variado'}</b>`;
+    const verbo = propietarioVista==='Pablo' ? 'prefiere' : 'preferís';
+    let texto = `Con ${r.n} vinos bien puntuados: ${verbo} cuerpo <b>${r.cuerpoModa||'variado'}</b>, dulzor <b>${r.dulzorModa||'variado'}</b>`;
     if(r.topUva) texto += `, y la uva que más repite es <b>${escapeHtml(r.topUva)}</b>`;
     texto += r.topAromas.length ? `. Los aromas que más aparecen: <b>${r.topAromas.join(', ')}</b>.` : '.';
     panel.innerHTML = `<p>${texto}</p>`;
@@ -1063,8 +1179,46 @@ const PAISES = [
 
 const TODAS_SUGERENCIAS = [...REGIONES.map(r=>r.label), ...PAISES.map(p=>p.label)];
 
+// Mapeo región/DO -> país, usado solo para el filtro de País.
+// Nota: es una asignación mía a partir de la geografía de cada región (no viene de un campo guardado),
+// así que si una región no aparece aquí, no se podrá filtrar por su país.
+const PAIS_POR_REGION = {
+  'Rioja':'España','Ribera del Duero':'España','Priorat':'España','Montsant':'España','Rías Baixas':'España',
+  'Ribeiro':'España','Valdeorras':'España','Monterrei':'España','Penedès':'España','Corpinnat':'España','Cava':'España',
+  'Alella':'España','Costers del Segre':'España','Terra Alta':'España','Empordà':'España','Conca de Barberà':'España',
+  'Jerez':'España','Rueda':'España','Cigales':'España','Bierzo':'España','Toro':'España','Arribes':'España',
+  'Jumilla':'España','Yecla':'España','Bullas':'España','Alicante':'España','Utiel-Requena':'España','Somontano':'España',
+  'Campo de Borja':'España','Calatayud':'España','Cariñena':'España','Navarra':'España','Manchuela':'España',
+  'Vinos de Madrid':'España','Méntrida':'España','Ribera del Guadiana':'España','Valdepeñas':'España','La Mancha':'España',
+  'Sierra de Gredos':'España',
+  'Bordeaux':'Francia','Pauillac':'Francia','Médoc':'Francia','Saint-Émilion':'Francia','Sauternes':'Francia',
+  'Bourgogne':'Francia','Champagne':'Francia','Alsace':'Francia','Côtes du Rhône':'Francia','Loire':'Francia',
+  'Languedoc':'Francia','Roussillon':'Francia','Provence':'Francia','Jura (Francia)':'Francia','Beaujolais':'Francia',
+  'Cahors':'Francia','Jurançon':'Francia','Bandol':'Francia',
+  'Nahe':'Alemania','Mosel':'Alemania','Rheingau':'Alemania','Pfalz':'Alemania','Rheinhessen':'Alemania','Baden':'Alemania',
+  'Toscana':'Italia','Chianti':'Italia','Montalcino':'Italia','Piemonte':'Italia','Barolo':'Italia','Veneto':'Italia',
+  'Valpolicella':'Italia','Soave':'Italia','Franciacorta':'Italia','Etna':'Italia','Sicilia':'Italia','Puglia':'Italia',
+  'Douro':'Portugal','Vinho Verde':'Portugal','Dão':'Portugal','Alentejo':'Portugal','Bairrada':'Portugal','Madeira':'Portugal',
+  'Napa':'Estados Unidos','Sonoma':'Estados Unidos','Willamette Valley':'Estados Unidos','Washington (EEUU)':'Estados Unidos',
+  'Mendoza':'Argentina','Salta':'Argentina','Maipo':'Chile','Casablanca (Chile)':'Chile',
+  'Barossa Valley':'Australia','McLaren Vale':'Australia','Margaret River':'Australia',
+  'Marlborough':'Nueva Zelanda','Central Otago':'Nueva Zelanda','Stellenbosch':'Sudáfrica',
+  'Wachau':'Austria','Tokaj':'Hungría','Santorini':'Grecia',
+};
+
 function normalizeAccents(s){
   return (s||'').toString().trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+}
+
+function paisDeDO(doText){
+  const norm = normalizeAccents(doText);
+  if(!norm) return null;
+  let foundRegion = REGIONES.find(r=>normalizeAccents(r.label)===norm);
+  if(!foundRegion) foundRegion = REGIONES.find(r=>{ const rl=normalizeAccents(r.label); return norm.includes(rl) || rl.includes(norm); });
+  if(foundRegion) return PAIS_POR_REGION[foundRegion.label] || null;
+  let foundPais = PAISES.find(p=>normalizeAccents(p.label)===norm);
+  if(!foundPais) foundPais = PAISES.find(p=>{ const pl=normalizeAccents(p.label); return norm.includes(pl) || pl.includes(norm); });
+  return foundPais ? foundPais.label : null;
 }
 
 function matchRegion(doText){
@@ -1130,7 +1284,7 @@ function actualizarMarcadoresMapa(){
   mapaMarkers = [];
   const grupos = {};
   let sinUbicar = 0;
-  wines.forEach(w=>{
+  winesDeVista().forEach(w=>{
     const region = matchRegion(w.do);
     if(!region){ sinUbicar++; return; }
     const key = `${region.lat},${region.lng}`;
@@ -1154,7 +1308,7 @@ function actualizarMarcadoresMapa(){
 }
 
 function renderMapaBoton(){
-  document.getElementById('btnMapa').style.display = wines.length>=1 ? 'inline-block' : 'none';
+  document.getElementById('btnMapa').style.display = winesDeVista().length>=1 ? 'inline-block' : 'none';
 }
 
 document.getElementById('btnMapa').addEventListener('click', abrirMapa);
@@ -1162,7 +1316,7 @@ document.getElementById('btnCerrarMapa').addEventListener('click', cerrarMapa);
 
 function renderRanking(){
   const el = document.getElementById('rankingRow');
-  const puntuados = wines.filter(w=>scoreNum(w)!==null);
+  const puntuados = winesDeVista().filter(w=>scoreNum(w)!==null);
   if(puntuados.length<2){ el.innerHTML=''; return; }
   const top = puntuados.slice().sort((a,b)=>scoreNum(b)-scoreNum(a)).slice(0,3);
   const medals=['🥇','🥈','🥉'];
@@ -1178,11 +1332,61 @@ function renderFilterChips(){
   el.querySelectorAll('.chip').forEach(c=>c.addEventListener('click', ()=>{ activeTipoFilter=c.dataset.tipo; render(); }));
 }
 
+function renderFiltroDOyPais(){
+  const base = winesDeVista();
+  const selDO = document.getElementById('filtroDO');
+  const dos = Array.from(new Set(base.map(w=>(w.do||'').trim()).filter(Boolean))).sort((a,b)=>a.localeCompare(b));
+  selDO.innerHTML = '<option value="todos">Todas</option>' + dos.map(d=>`<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('');
+  selDO.value = dos.includes(activeDoFilter) ? activeDoFilter : (activeDoFilter='todos');
+
+  const selPais = document.getElementById('filtroPais');
+  let hayNoIdentificado = false;
+  const paises = new Set();
+  base.forEach(w=>{
+    if(!(w.do||'').trim()) return;
+    const p = paisDeDO(w.do);
+    if(p) paises.add(p); else hayNoIdentificado = true;
+  });
+  const paisesOrdenados = Array.from(paises).sort((a,b)=>a.localeCompare(b));
+  if(hayNoIdentificado) paisesOrdenados.push('Sin país identificado');
+  selPais.innerHTML = '<option value="todos">Todos</option>' + paisesOrdenados.map(p=>`<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
+  selPais.value = paisesOrdenados.includes(activePaisFilter) ? activePaisFilter : (activePaisFilter='todos');
+}
+
+function renderFiltroPrecio(){
+  const el = document.getElementById('filtroPrecioChips');
+  el.innerHTML = PRECIO_BUCKETS.map(b=>`<div class="chip ${activePrecioFilter===b.v?'active':''}" data-precio="${b.v}">${b.l}</div>`).join('');
+  el.querySelectorAll('.chip').forEach(c=>c.addEventListener('click', ()=>{ activePrecioFilter=c.dataset.precio; render(); }));
+}
+
+function actualizarBadgeFiltros(){
+  const activos = [activeDoFilter, activePaisFilter, activePrecioFilter].filter(v=>v!=='todos').length;
+  const badge = document.getElementById('filtrosBadge');
+  const btn = document.getElementById('btnToggleFiltros');
+  badge.style.display = activos>0 ? 'inline-block' : 'none';
+  badge.textContent = activos;
+  btn.classList.toggle('hay-filtros', activos>0);
+}
+
+document.getElementById('btnToggleFiltros').addEventListener('click', ()=>{
+  const panel = document.getElementById('filterPanel');
+  panel.style.display = panel.style.display==='block' ? 'none' : 'block';
+});
+document.getElementById('filtroDO').addEventListener('change', (e)=>{ activeDoFilter = e.target.value; render(); });
+document.getElementById('filtroPais').addEventListener('change', (e)=>{ activePaisFilter = e.target.value; render(); });
+document.getElementById('btnLimpiarFiltros').addEventListener('click', ()=>{
+  activeDoFilter = 'todos'; activePaisFilter = 'todos'; activePrecioFilter = 'todos';
+  render();
+});
+
 function getFilteredSorted(){
   const q = document.getElementById('searchInput').value.trim().toLowerCase();
   const sort = document.getElementById('sortSelect').value;
-  let list = wines.filter(w=>{
+  let list = winesDeVista().filter(w=>{
     if(activeTipoFilter!=='todos' && w.tipo!==activeTipoFilter) return false;
+    if(activeDoFilter!=='todos' && (w.do||'').trim()!==activeDoFilter) return false;
+    if(activePaisFilter!=='todos' && (paisDeDO(w.do)||'Sin país identificado')!==activePaisFilter) return false;
+    if(activePrecioFilter!=='todos' && !precioEnBucket(w.precio, activePrecioFilter)) return false;
     if(q && !(`${w.nombre} ${w.bodega} ${w.uva||''} ${w.do||''}`.toLowerCase().includes(q))) return false;
     return true;
   });
@@ -1196,29 +1400,39 @@ function getFilteredSorted(){
 }
 
 function render(){
+  renderBodegaTabs();
+  const esBodegaPropia = propietarioVista===propietarioActual;
+  document.getElementById('fabAdd').style.display = esBodegaPropia ? 'block' : 'none';
+  document.getElementById('btnImport').style.display = esBodegaPropia ? 'inline' : 'none';
   renderStats();
   renderRanking();
   renderGustoBoton();
   renderMapaBoton();
   renderFilterChips();
+  renderFiltroDOyPais();
+  renderFiltroPrecio();
+  actualizarBadgeFiltros();
   const list = getFilteredSorted();
   const container = document.getElementById('listContainer');
-  if(wines.length===0){
-    container.innerHTML = `<div class="empty"><div class="glyph">🍷</div><p>Aún no hay vinos en la bodega.<br>Añade el primero.</p></div>`;
+  if(winesDeVista().length===0){
+    const msg = esBodegaPropia ? 'Aún no hay vinos en la bodega.<br>Añade el primero.' : 'Todavía no hay vinos en esta bodega.';
+    container.innerHTML = `<div class="empty"><div class="glyph">🍷</div><p>${msg}</p></div>`;
     return;
   }
   if(list.length===0){
-    container.innerHTML = `<div class="empty"><div class="glyph">🔍</div><p>Ningún vino coincide con la búsqueda.</p></div>`;
+    container.innerHTML = `<div class="empty"><div class="glyph">🔍</div><p>Ningún vino coincide con la búsqueda o los filtros.</p></div>`;
     return;
   }
-  container.innerHTML = list.map(w=>cardHtml(w)).join('');
+  container.innerHTML = list.map(w=>cardHtml(w, esBodegaPropia)).join('');
   list.forEach(w=>{
     document.getElementById('card-'+w.id).addEventListener('click', (e)=>{
       if(e.target.closest('.icon-btn')) return;
       document.getElementById('details-'+w.id).classList.toggle('open');
     });
-    document.getElementById('edit-'+w.id).addEventListener('click', (e)=>{e.stopPropagation(); openSheet(w);});
-    document.getElementById('del-'+w.id).addEventListener('click', (e)=>{
+    const btnEdit = document.getElementById('edit-'+w.id);
+    const btnDel = document.getElementById('del-'+w.id);
+    if(btnEdit) btnEdit.addEventListener('click', (e)=>{e.stopPropagation(); openSheet(w);});
+    if(btnDel) btnDel.addEventListener('click', (e)=>{
       e.stopPropagation();
       if(confirm('¿Eliminar '+w.nombre+' de la bodega?')){
         db.collection('vinos').doc(w.id).delete();
@@ -1229,8 +1443,10 @@ function render(){
 
 function vinosParecidos(wine){
   const misUvas = (wine.uva||'').split(',').map(s=>s.trim().toLowerCase()).filter(Boolean);
+  const propietarioWine = wine.propietario||'MarcAmaia';
   return wines.filter(w=>{
     if(w.id===wine.id) return false;
+    if((w.propietario||'MarcAmaia')!==propietarioWine) return false;
     const susUvas = (w.uva||'').split(',').map(s=>s.trim().toLowerCase()).filter(Boolean);
     const compartenUva = misUvas.some(u=>susUvas.includes(u));
     const compartenDo = wine.do && w.do && wine.do.trim().toLowerCase()===w.do.trim().toLowerCase();
@@ -1238,8 +1454,8 @@ function vinosParecidos(wine){
   }).sort((a,b)=>(scoreNum(b)??-Infinity)-(scoreNum(a)??-Infinity)).slice(0,3);
 }
 
-function cardHtml(w){
-  const quienColor = (QUIEN.find(q=>q.v===w.quien)||{}).c || 'var(--slate)';
+function cardHtml(w, esBodegaPropia){
+  const quienColor = (QUIEN_TODOS.find(q=>q.v===w.quien)||{}).c || 'var(--slate)';
   const initials = w.quien==='Ambos' ? 'M+A' : (w.quien||'?')[0];
   return `
   <div class="card" id="card-${w.id}">
@@ -1269,8 +1485,7 @@ function cardHtml(w){
           ${tipoLabel(w.tipo)}
         </div>
         <div class="card-actions">
-          <button class="icon-btn" id="edit-${w.id}">✎</button>
-          <button class="icon-btn danger" id="del-${w.id}">🗑</button>
+          ${esBodegaPropia ? `<button class="icon-btn" id="edit-${w.id}">✎</button><button class="icon-btn danger" id="del-${w.id}">🗑</button>` : ''}
         </div>
       </div>
       <div class="details" id="details-${w.id}">
@@ -1343,7 +1558,6 @@ function initForm(){
   buildChipset('f_persistencia', PERSISTENCIA); attachSingleSelect('f_persistencia','persistencia', DEF_TERMINOS.persistencia);
   buildChipset('f_aromas', AROMAS); attachMultiSelect('f_aromas','aromas', DEF_TERMINOS.aromas);
   buildChipset('f_repetir', REPETIR); attachSingleSelect('f_repetir','repetir');
-  buildChipset('f_quien', QUIEN); attachSingleSelect('f_quien','quien');
   document.getElementById('f_score').addEventListener('input', (e)=>{
     document.getElementById('f_score_display').textContent = parseFloat(e.target.value).toFixed(1);
   });
@@ -1361,6 +1575,7 @@ function resetForm(){
   document.getElementById('fotoPreviewWrap').style.display = 'none';
 }
 function openSheet(wine){
+  buildChipset('f_quien', opcionesQuien()); attachSingleSelect('f_quien','quien');
   resetForm();
   editingId = wine ? wine.id : null;
   document.getElementById('sheetTitle').textContent = wine ? 'Editar vino' : 'Nuevo vino';
@@ -1431,12 +1646,14 @@ async function handleSave(){
   if(editingId){
     const existente = wines.find(w=>w.id===editingId);
     wine.veces = (existente && existente.veces) ? existente.veces : 1;
+    wine.propietario = (existente && existente.propietario) ? existente.propietario : 'MarcAmaia';
   }else{
     wine.veces = 1;
+    wine.propietario = propietarioActual;
   }
 
   if(!editingId){
-    const match = wines.find(w=>claveVino(w)===claveVino(wine));
+    const match = winesPropias().find(w=>claveVino(w)===claveVino(wine));
     if(match){
       const fusionar = confirm(`Ya tenéis "${wine.nombre}" de ${wine.bodega||'—'} (añada ${wine.anada||'?'}) registrado.\n\nAceptar: fusionar esta cata con la anterior (se hace la media de notas).\nCancelar: guardarlo como entrada aparte.`);
       if(fusionar){
