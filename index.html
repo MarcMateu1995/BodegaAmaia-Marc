@@ -17,6 +17,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <style>
   :root{
     --paper:#EFE6D8;
@@ -259,6 +261,20 @@
     padding:14px 16px;font-size:13.5px;color:var(--ink-soft);line-height:1.5;text-align:left;
   }
   .gusto-panel b{color:var(--wine);}
+  .mapa-sheet{
+    height:82vh;max-height:82vh;display:flex;flex-direction:column;overflow:hidden!important;
+  }
+  #mapaContainer{flex:1;border-radius:12px;overflow:hidden;min-height:280px;background:var(--paper-dark);}
+  #mapaSinUbicar{font-size:12px;color:var(--ink-soft);margin-top:8px;text-align:center;}
+  .mapa-popup{font-family:'Inter',sans-serif;font-size:13px;line-height:1.5;}
+  .mapa-popup b{color:var(--wine);}
+  .suggest-list{
+    position:absolute;left:0;right:0;top:100%;background:var(--paper-card);
+    border:1px solid var(--paper-dark);border-radius:0 0 10px 10px;max-height:180px;
+    overflow-y:auto;z-index:30;display:none;box-shadow:0 4px 10px rgba(0,0,0,0.15);
+  }
+  .suggest-item{padding:8px 12px;font-size:13px;color:var(--ink);cursor:pointer;}
+  .suggest-item:hover{background:var(--paper);}
 </style>
 </head>
 <body>
@@ -319,6 +335,7 @@
     <div id="rankingRow"></div>
     <div style="text-align:center;margin-top:10px;">
       <button class="gusto-btn" id="btnGusto" style="display:none;">Ver nuestro gusto</button>
+      <button class="gusto-btn" id="btnMapa" style="display:none;margin-left:8px;">Ver mapa</button>
     </div>
     <div class="gusto-panel" id="gustoPanel" style="display:none;"></div>
   </header>
@@ -356,7 +373,11 @@
       <div class="field"><label>Añada</label><input type="number" id="f_anada" placeholder="2019"></div>
       <div class="field"><label>Precio (€)</label><input type="number" id="f_precio" placeholder="18"></div>
     </div>
-    <div class="field"><label>DO / Región</label><input type="text" id="f_do" placeholder="Rioja"></div>
+    <div class="field" style="position:relative;">
+      <label>DO / Región</label>
+      <input type="text" id="f_do" placeholder="Rioja (o el país si no sabes la DO exacta)" autocomplete="off">
+      <div class="suggest-list" id="doSuggestList"></div>
+    </div>
     <div class="field">
       <label>Uva(s)</label>
       <div class="chipset" id="f_uva_chips"></div>
@@ -379,7 +400,11 @@
     <div class="field"><label>Estilo</label><div class="chipset" id="f_estilo"></div></div>
     <div class="field"><label>Acidez</label><div class="chipset" id="f_acidez"></div></div>
     <div class="field"><label>Persistencia</label><div class="chipset" id="f_persistencia"></div></div>
-    <div class="field"><label>Aromas (elige los que encajen)</label><div class="chipset" id="f_aromas"></div></div>
+    <div class="field">
+      <label>Aromas (elige los que encajen)</label>
+      <div class="chipset" id="f_aromas"></div>
+      <input type="text" id="f_aromas_otro" placeholder="¿Falta alguno? Escríbelo aquí (separa varios con comas)" style="margin-top:8px;">
+    </div>
     <div class="field"><label>¿Lo repetiríamos?</label><div class="chipset" id="f_repetir"></div></div>
     <div class="field"><label>¿Quién cató?</label><div class="chipset" id="f_quien"></div></div>
     <div class="field"><label>Fecha</label><input type="date" id="f_fecha"></div>
@@ -396,6 +421,17 @@
       <button class="btn ghost" id="btnCancel">Cancelar</button>
       <button class="btn primary" id="btnSave">Guardar vino</button>
     </div>
+  </div>
+</div>
+
+<div class="overlay" id="mapaOverlay">
+  <div class="sheet mapa-sheet">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <h2 style="margin:0;">Mapa de la bodega</h2>
+      <button class="icon-btn" id="btnCerrarMapa" style="font-size:22px;">✕</button>
+    </div>
+    <div id="mapaContainer"></div>
+    <div id="mapaSinUbicar"></div>
   </div>
 </div>
 
@@ -636,6 +672,44 @@ function traducirErrorAuth(code){
   return m[code] || 'Algo ha fallado. Inténtalo de nuevo.';
 }
 
+function claveVino(w){
+  return `${(w.nombre||'').trim().toLowerCase()}|${(w.bodega||'').trim().toLowerCase()}|${(w.anada||'').toString().trim()}`;
+}
+
+function fusionarVino(existente, nuevo){
+  const vecesExistente = existente.veces || 1;
+  const scoreExistente = scoreNum(existente);
+  const scoreNuevo = (nuevo.score!=null && !isNaN(parseFloat(nuevo.score))) ? parseFloat(nuevo.score) : null;
+  let scoreFinal = scoreExistente;
+  if(scoreExistente!=null && scoreNuevo!=null){
+    scoreFinal = ((scoreExistente*vecesExistente) + scoreNuevo) / (vecesExistente+1);
+    scoreFinal = Math.round(scoreFinal*10)/10;
+  } else if(scoreNuevo!=null){
+    scoreFinal = scoreNuevo;
+  }
+  const quienFinal = (existente.quien && nuevo.quien && existente.quien!==nuevo.quien) ? 'Ambos' : (existente.quien || nuevo.quien || '');
+  return {
+    ...existente,
+    do: existente.do || nuevo.do,
+    uva: existente.uva || nuevo.uva,
+    precio: existente.precio || nuevo.precio,
+    cuerpo: existente.cuerpo || nuevo.cuerpo,
+    taninos: existente.taninos || nuevo.taninos,
+    dulzor: existente.dulzor || nuevo.dulzor,
+    estilo: existente.estilo || nuevo.estilo,
+    acidez: existente.acidez || nuevo.acidez,
+    persistencia: existente.persistencia || nuevo.persistencia,
+    aromas: Array.from(new Set([...(existente.aromas||[]), ...(nuevo.aromas||[])])),
+    repetir: nuevo.repetir || existente.repetir,
+    quien: quienFinal,
+    fecha: nuevo.fecha || existente.fecha,
+    notas: [existente.notas, nuevo.notas].filter(Boolean).join(' / '),
+    foto: existente.foto || nuevo.foto || null,
+    score: scoreFinal,
+    veces: vecesExistente + 1,
+  };
+}
+
 document.getElementById('btnLogout').addEventListener('click', ()=> auth.signOut());
 
 function normalizeKey(k){
@@ -707,20 +781,44 @@ async function importarArchivo(file){
   });
 
   if(nuevos.length===0){ alert('No se ha encontrado ninguna fila válida (falta el nombre en todas).'); return; }
-  if(!confirm(`Se van a importar ${nuevos.length} vino(s) nuevo(s). ¿Continuar?`)) return;
+
+  const existentesPorClave = {};
+  wines.forEach(w=>{ existentesPorClave[claveVino(w)] = w; });
+
+  const paraCrear = [];
+  const paraFusionar = [];
+  nuevos.forEach(w=>{
+    const key = claveVino(w);
+    const match = existentesPorClave[key];
+    if(match){
+      const fusionado = fusionarVino(match, w);
+      paraFusionar.push({ id: match.id, data: fusionado });
+      existentesPorClave[key] = { ...fusionado, id: match.id };
+    }else{
+      const conVeces = { ...w, veces: 1 };
+      paraCrear.push(conVeces);
+      existentesPorClave[key] = conVeces;
+    }
+  });
+
+  if(!confirm(`Se van a crear ${paraCrear.length} vino(s) nuevo(s) y fusionar ${paraFusionar.length} repetido(s) (se hará la media de nota). ¿Continuar?`)) return;
 
   try{
     const CHUNK = 400;
-    for(let i=0; i<nuevos.length; i+=CHUNK){
-      const chunk = nuevos.slice(i, i+CHUNK);
+    const ops = [
+      ...paraCrear.map(w=>({tipo:'crear', data:w})),
+      ...paraFusionar.map(u=>({tipo:'fusionar', id:u.id, data:u.data})),
+    ];
+    for(let i=0; i<ops.length; i+=CHUNK){
+      const chunk = ops.slice(i, i+CHUNK);
       const batch = db.batch();
-      chunk.forEach(w=>{
-        const ref = db.collection('vinos').doc();
-        batch.set(ref, w);
+      chunk.forEach(op=>{
+        const ref = op.tipo==='crear' ? db.collection('vinos').doc() : db.collection('vinos').doc(op.id);
+        batch.set(ref, op.data);
       });
       await batch.commit();
     }
-    alert(`Importados ${nuevos.length} vino(s) correctamente.`);
+    alert(`Creados ${paraCrear.length} vino(s) nuevo(s) y fusionados ${paraFusionar.length} repetido(s).`);
   }catch(e){
     console.error(e);
     alert('Error al importar: ' + (e.message || e.code || 'desconocido'));
@@ -830,6 +928,234 @@ document.getElementById('btnGusto').addEventListener('click', ()=>{
   panel.style.display = 'block';
 });
 
+const REGIONES = [
+  {label:'Rioja', lat:42.46, lng:-2.71},
+  {label:'Ribera del Duero', lat:41.61, lng:-3.69},
+  {label:'Priorat', lat:41.22, lng:0.83},
+  {label:'Montsant', lat:41.24, lng:0.75},
+  {label:'Rías Baixas', lat:42.36, lng:-8.74},
+  {label:'Ribeiro', lat:42.36, lng:-8.24},
+  {label:'Valdeorras', lat:42.42, lng:-7.15},
+  {label:'Monterrei', lat:41.98, lng:-7.55},
+  {label:'Penedès', lat:41.34, lng:1.68},
+  {label:'Corpinnat', lat:41.34, lng:1.68},
+  {label:'Cava', lat:41.34, lng:1.68},
+  {label:'Alella', lat:41.49, lng:2.29},
+  {label:'Costers del Segre', lat:41.61, lng:0.62},
+  {label:'Terra Alta', lat:41.06, lng:0.43},
+  {label:'Empordà', lat:42.13, lng:2.96},
+  {label:'Conca de Barberà', lat:41.40, lng:1.20},
+  {label:'Jerez', lat:36.68, lng:-6.14},
+  {label:'Rueda', lat:41.40, lng:-4.95},
+  {label:'Cigales', lat:41.70, lng:-4.70},
+  {label:'Bierzo', lat:42.60, lng:-6.60},
+  {label:'Toro', lat:41.52, lng:-5.40},
+  {label:'Arribes', lat:41.20, lng:-6.60},
+  {label:'Jumilla', lat:38.47, lng:-1.32},
+  {label:'Yecla', lat:38.60, lng:-1.11},
+  {label:'Bullas', lat:38.05, lng:-1.68},
+  {label:'Alicante', lat:38.35, lng:-0.48},
+  {label:'Utiel-Requena', lat:39.47, lng:-1.20},
+  {label:'Somontano', lat:42.07, lng:0.10},
+  {label:'Campo de Borja', lat:41.84, lng:-1.54},
+  {label:'Calatayud', lat:41.35, lng:-1.64},
+  {label:'Cariñena', lat:41.34, lng:-1.23},
+  {label:'Navarra', lat:42.70, lng:-1.65},
+  {label:'Manchuela', lat:39.40, lng:-2.00},
+  {label:'Vinos de Madrid', lat:40.30, lng:-3.80},
+  {label:'Méntrida', lat:40.00, lng:-4.30},
+  {label:'Ribera del Guadiana', lat:38.90, lng:-6.30},
+  {label:'Valdepeñas', lat:38.76, lng:-3.38},
+  {label:'La Mancha', lat:39.30, lng:-3.10},
+  {label:'Sierra de Gredos', lat:40.20, lng:-5.10},
+  {label:'Bordeaux', lat:44.84, lng:-0.58},
+  {label:'Pauillac', lat:45.20, lng:-0.74},
+  {label:'Médoc', lat:45.10, lng:-0.80},
+  {label:'Saint-Émilion', lat:44.89, lng:-0.15},
+  {label:'Sauternes', lat:44.53, lng:-0.36},
+  {label:'Bourgogne', lat:47.05, lng:4.38},
+  {label:'Champagne', lat:49.05, lng:3.96},
+  {label:'Alsace', lat:48.20, lng:7.45},
+  {label:'Côtes du Rhône', lat:44.93, lng:4.89},
+  {label:'Loire', lat:47.39, lng:0.69},
+  {label:'Languedoc', lat:43.40, lng:3.20},
+  {label:'Roussillon', lat:42.60, lng:2.65},
+  {label:'Provence', lat:43.53, lng:5.45},
+  {label:'Jura (Francia)', lat:46.68, lng:5.75},
+  {label:'Beaujolais', lat:46.13, lng:4.68},
+  {label:'Cahors', lat:44.45, lng:1.44},
+  {label:'Jurançon', lat:43.28, lng:-0.42},
+  {label:'Bandol', lat:43.14, lng:5.75},
+  {label:'Nahe', lat:49.87, lng:7.66},
+  {label:'Mosel', lat:49.96, lng:7.13},
+  {label:'Rheingau', lat:50.02, lng:7.95},
+  {label:'Pfalz', lat:49.35, lng:8.10},
+  {label:'Rheinhessen', lat:49.85, lng:8.15},
+  {label:'Baden', lat:48.30, lng:7.90},
+  {label:'Toscana', lat:43.47, lng:11.33},
+  {label:'Chianti', lat:43.47, lng:11.33},
+  {label:'Montalcino', lat:43.06, lng:11.49},
+  {label:'Piemonte', lat:44.61, lng:7.94},
+  {label:'Barolo', lat:44.61, lng:7.94},
+  {label:'Veneto', lat:45.50, lng:11.80},
+  {label:'Valpolicella', lat:45.55, lng:10.90},
+  {label:'Soave', lat:45.42, lng:11.16},
+  {label:'Franciacorta', lat:45.60, lng:10.10},
+  {label:'Etna', lat:37.75, lng:15.00},
+  {label:'Sicilia', lat:37.60, lng:14.02},
+  {label:'Puglia', lat:41.10, lng:16.87},
+  {label:'Douro', lat:41.16, lng:-7.79},
+  {label:'Vinho Verde', lat:41.55, lng:-8.40},
+  {label:'Dão', lat:40.50, lng:-7.90},
+  {label:'Alentejo', lat:38.57, lng:-7.90},
+  {label:'Bairrada', lat:40.35, lng:-8.45},
+  {label:'Madeira', lat:32.66, lng:-16.92},
+  {label:'Napa', lat:38.50, lng:-122.27},
+  {label:'Sonoma', lat:38.44, lng:-122.71},
+  {label:'Willamette Valley', lat:45.20, lng:-123.10},
+  {label:'Washington (EEUU)', lat:46.50, lng:-120.50},
+  {label:'Mendoza', lat:-33.00, lng:-68.85},
+  {label:'Salta', lat:-24.78, lng:-65.42},
+  {label:'Maipo', lat:-33.80, lng:-70.75},
+  {label:'Casablanca (Chile)', lat:-33.32, lng:-71.42},
+  {label:'Barossa Valley', lat:-34.53, lng:138.95},
+  {label:'McLaren Vale', lat:-35.22, lng:138.54},
+  {label:'Margaret River', lat:-33.95, lng:115.07},
+  {label:'Marlborough', lat:-41.51, lng:173.95},
+  {label:'Central Otago', lat:-45.03, lng:169.15},
+  {label:'Stellenbosch', lat:-33.93, lng:18.86},
+  {label:'Wachau', lat:48.37, lng:15.50},
+  {label:'Tokaj', lat:48.12, lng:21.40},
+  {label:'Santorini', lat:36.39, lng:25.46},
+];
+
+const PAISES = [
+  {label:'España', lat:40.30, lng:-3.70},
+  {label:'Francia', lat:46.60, lng:2.20},
+  {label:'Italia', lat:42.50, lng:12.50},
+  {label:'Alemania', lat:51.10, lng:10.40},
+  {label:'Portugal', lat:39.50, lng:-8.00},
+  {label:'Argentina', lat:-38.40, lng:-63.60},
+  {label:'Chile', lat:-35.60, lng:-71.50},
+  {label:'Estados Unidos', lat:39.80, lng:-98.50},
+  {label:'Australia', lat:-25.20, lng:133.70},
+  {label:'Nueva Zelanda', lat:-41.50, lng:172.80},
+  {label:'Sudáfrica', lat:-30.50, lng:22.90},
+  {label:'Austria', lat:47.50, lng:14.50},
+  {label:'Hungría', lat:47.10, lng:19.50},
+  {label:'Grecia', lat:39.00, lng:21.80},
+  {label:'Georgia', lat:42.30, lng:43.30},
+  {label:'Uruguay', lat:-32.50, lng:-55.70},
+  {label:'Marruecos', lat:31.70, lng:-7.00},
+  {label:'Líbano', lat:33.80, lng:35.80},
+  {label:'Israel', lat:31.00, lng:34.80},
+  {label:'Croacia', lat:45.10, lng:15.20},
+  {label:'Eslovenia', lat:46.10, lng:14.90},
+  {label:'Rumanía', lat:45.90, lng:24.90},
+  {label:'Suiza', lat:46.80, lng:8.20},
+  {label:'Canadá', lat:56.10, lng:-106.30},
+  {label:'México', lat:23.60, lng:-102.50},
+];
+
+const TODAS_SUGERENCIAS = [...REGIONES.map(r=>r.label), ...PAISES.map(p=>p.label)];
+
+function normalizeAccents(s){
+  return (s||'').toString().trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+}
+
+function matchRegion(doText){
+  const norm = normalizeAccents(doText);
+  if(!norm) return null;
+  let found = REGIONES.find(r=>normalizeAccents(r.label)===norm);
+  if(found) return found;
+  found = REGIONES.find(r=>{ const rl=normalizeAccents(r.label); return norm.includes(rl) || rl.includes(norm); });
+  if(found) return found;
+  found = PAISES.find(p=>normalizeAccents(p.label)===norm);
+  if(found) return found;
+  found = PAISES.find(p=>{ const pl=normalizeAccents(p.label); return norm.includes(pl) || pl.includes(norm); });
+  return found || null;
+}
+
+function actualizarSugerenciasDO(){
+  const input = document.getElementById('f_do');
+  const list = document.getElementById('doSuggestList');
+  const val = normalizeAccents(input.value);
+  if(!val){ list.style.display='none'; list.innerHTML=''; return; }
+  const matches = TODAS_SUGERENCIAS.filter(s=>normalizeAccents(s).includes(val)).slice(0,7);
+  if(matches.length===0){ list.style.display='none'; list.innerHTML=''; return; }
+  list.innerHTML = matches.map(s=>`<div class="suggest-item" data-val="${s}">${s}</div>`).join('');
+  list.style.display='block';
+  list.querySelectorAll('.suggest-item').forEach(it=>{
+    it.addEventListener('mousedown', (e)=>{
+      e.preventDefault();
+      input.value = it.dataset.val;
+      list.style.display='none';
+    });
+  });
+}
+document.getElementById('f_do').addEventListener('input', actualizarSugerenciasDO);
+document.getElementById('f_do').addEventListener('focus', actualizarSugerenciasDO);
+document.getElementById('f_do').addEventListener('blur', ()=>{
+  setTimeout(()=>{ document.getElementById('doSuggestList').style.display='none'; }, 150);
+});
+
+let mapaLeaflet = null;
+let mapaMarkers = [];
+
+function abrirMapa(){
+  document.getElementById('mapaOverlay').classList.add('open');
+  setTimeout(()=>{
+    if(!mapaLeaflet){
+      mapaLeaflet = L.map('mapaContainer', {worldCopyJump:true}).setView([30,10], 2);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 18,
+        attribution: '© OpenStreetMap'
+      }).addTo(mapaLeaflet);
+    }
+    mapaLeaflet.invalidateSize();
+    actualizarMarcadoresMapa();
+  }, 60);
+}
+
+function cerrarMapa(){
+  document.getElementById('mapaOverlay').classList.remove('open');
+}
+
+function actualizarMarcadoresMapa(){
+  mapaMarkers.forEach(m=>mapaLeaflet.removeLayer(m));
+  mapaMarkers = [];
+  const grupos = {};
+  let sinUbicar = 0;
+  wines.forEach(w=>{
+    const region = matchRegion(w.do);
+    if(!region){ sinUbicar++; return; }
+    const key = `${region.lat},${region.lng}`;
+    if(!grupos[key]) grupos[key] = { region, vinos: [] };
+    grupos[key].vinos.push(w);
+  });
+  Object.values(grupos).forEach(g=>{
+    const n = g.vinos.length;
+    const radius = 9 + Math.min(n,15)*2.2;
+    const marker = L.circleMarker([g.region.lat, g.region.lng], {
+      radius, color:'#7A1F3D', weight:2, fillColor:'#B08B4F', fillOpacity:0.75
+    }).addTo(mapaLeaflet);
+    const listado = g.vinos.slice(0,8).map(w=>`${escapeHtml(w.nombre)} — ${scoreDisplay(w)}`).join('<br>');
+    marker.bindPopup(`<div class="mapa-popup"><b>${n} vino${n>1?'s':''}</b><br>${listado}${n>8?'<br>…':''}</div>`);
+    mapaMarkers.push(marker);
+  });
+  const el = document.getElementById('mapaSinUbicar');
+  el.textContent = sinUbicar>0
+    ? `${sinUbicar} vino(s) con una región que no reconozco, no aparecen en el mapa.`
+    : '';
+}
+
+function renderMapaBoton(){
+  document.getElementById('btnMapa').style.display = wines.length>=1 ? 'inline-block' : 'none';
+}
+
+document.getElementById('btnMapa').addEventListener('click', abrirMapa);
+document.getElementById('btnCerrarMapa').addEventListener('click', cerrarMapa);
+
 function renderRanking(){
   const el = document.getElementById('rankingRow');
   const puntuados = wines.filter(w=>scoreNum(w)!==null);
@@ -869,6 +1195,7 @@ function render(){
   renderStats();
   renderRanking();
   renderGustoBoton();
+  renderMapaBoton();
   renderFilterChips();
   const list = getFilteredSorted();
   const container = document.getElementById('listContainer');
@@ -918,10 +1245,10 @@ function cardHtml(w){
       <div class="seal">${scoreDisplay(w)}</div>
       <div class="top-row">
         ${w.foto?`<img class="foto-thumb" src="${w.foto}">`:''}
-        <div class="card-title-row">
-          <h3>${escapeHtml(w.nombre)}</h3>
-          <div class="bodega">${escapeHtml(w.bodega||'')}</div>
-        </div>
+      <div class="card-title-row">
+        <h3>${escapeHtml(w.nombre)}</h3>
+        <div class="bodega">${escapeHtml(w.bodega||'')}${w.veces>1?` <span class="tag" style="background:var(--gold);color:#fff;">×${w.veces}</span>`:''}</div>
+      </div>
       </div>
       <div class="meta-row">
         ${w.anada?`<span>${w.anada}</span>`:''}
@@ -952,6 +1279,7 @@ function cardHtml(w){
         ${w.repetir?`<div class="row"><b>¿Repetir?:</b> ${w.repetir}</div>`:''}
         ${w.notas?`<div class="row"><b>Notas:</b> ${escapeHtml(w.notas)}</div>`:''}
         <div class="row"><b>Fecha:</b> ${w.fecha||'-'}</div>
+        ${w.veces>1?`<div class="row"><b>Veces catado:</b> ${w.veces} (nota media)</div>`:''}
         ${(()=>{
           const parecidos = vinosParecidos(w);
           if(parecidos.length===0) return '';
@@ -1018,7 +1346,7 @@ function initForm(){
 }
 function resetForm(){
   sel = { tipo:null, cuerpo:null, taninos:null, dulzor:null, estilo:null, acidez:null, persistencia:null, aromas:[], uvas:[], repetir:null, quien:null };
-  ['f_nombre','f_bodega','f_anada','f_precio','f_do','f_uva_otra','f_notas'].forEach(id=>document.getElementById(id).value='');
+  ['f_nombre','f_bodega','f_anada','f_precio','f_do','f_uva_otra','f_aromas_otro','f_notas'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('f_score').value = 7;
   document.getElementById('f_score_display').textContent = '7.0';
   document.getElementById('f_fecha').value = new Date().toISOString().slice(0,10);
@@ -1050,6 +1378,13 @@ function openSheet(wine){
     const uvasOtras = uvasGuardadas.filter(u=>!UVAS.some(x=>x.toLowerCase()===u.toLowerCase()));
     document.getElementById('f_uva_otra').value = uvasOtras.join(', ');
     document.querySelectorAll('#f_uva_chips .chip-opt').forEach(x=>x.classList.toggle('sel', sel.uvas.includes(x.dataset.val)));
+
+    const aromasGuardados = wine.aromas||[];
+    sel.aromas = aromasGuardados.filter(a=>AROMAS.some(x=>x.toLowerCase()===a.toLowerCase()))
+                                 .map(a=>AROMAS.find(x=>x.toLowerCase()===a.toLowerCase()));
+    const aromasOtros = aromasGuardados.filter(a=>!AROMAS.some(x=>x.toLowerCase()===a.toLowerCase()));
+    document.getElementById('f_aromas_otro').value = aromasOtros.join(', ');
+    document.querySelectorAll('#f_aromas .chip-opt').forEach(x=>x.classList.toggle('sel', sel.aromas.includes(x.dataset.val)));
     document.querySelectorAll('#f_tipo .tipo-opt').forEach(x=>x.style.opacity = x.dataset.val===sel.tipo?'1':'0.4');
     document.querySelectorAll('#f_cuerpo .chip-opt').forEach(x=>x.classList.toggle('sel', x.dataset.val===sel.cuerpo));
     document.querySelectorAll('#f_taninos .chip-opt').forEach(x=>x.classList.toggle('sel', x.dataset.val===sel.taninos));
@@ -1057,7 +1392,6 @@ function openSheet(wine){
     document.querySelectorAll('#f_estilo .chip-opt').forEach(x=>x.classList.toggle('sel', x.dataset.val===sel.estilo));
     document.querySelectorAll('#f_acidez .chip-opt').forEach(x=>x.classList.toggle('sel', x.dataset.val===sel.acidez));
     document.querySelectorAll('#f_persistencia .chip-opt').forEach(x=>x.classList.toggle('sel', x.dataset.val===sel.persistencia));
-    document.querySelectorAll('#f_aromas .chip-opt').forEach(x=>x.classList.toggle('sel', sel.aromas.includes(x.dataset.val)));
     document.querySelectorAll('#f_repetir .chip-opt').forEach(x=>x.classList.toggle('sel', x.dataset.val===sel.repetir));
     document.querySelectorAll('#f_quien .chip-opt').forEach(x=>x.classList.toggle('sel', x.dataset.val===sel.quien));
     if(wine.foto){
@@ -1085,9 +1419,36 @@ async function handleSave(){
     score: parseFloat(document.getElementById('f_score').value),
     fecha: document.getElementById('f_fecha').value,
     tipo: sel.tipo, cuerpo: sel.cuerpo, taninos: sel.taninos,
-    dulzor: sel.dulzor, estilo: sel.estilo, acidez: sel.acidez, persistencia: sel.persistencia, aromas: sel.aromas.slice(), repetir: sel.repetir, quien: sel.quien,
+    dulzor: sel.dulzor, estilo: sel.estilo, acidez: sel.acidez, persistencia: sel.persistencia,
+    aromas: [...sel.aromas, ...document.getElementById('f_aromas_otro').value.split(',').map(s=>s.trim()).filter(Boolean)],
+    repetir: sel.repetir, quien: sel.quien,
     foto: fotoBase64 || null,
   };
+  if(editingId){
+    const existente = wines.find(w=>w.id===editingId);
+    wine.veces = (existente && existente.veces) ? existente.veces : 1;
+  }else{
+    wine.veces = 1;
+  }
+
+  if(!editingId){
+    const match = wines.find(w=>claveVino(w)===claveVino(wine));
+    if(match){
+      const fusionar = confirm(`Ya tenéis "${wine.nombre}" de ${wine.bodega||'—'} (añada ${wine.anada||'?'}) registrado.\n\nAceptar: fusionar esta cata con la anterior (se hace la media de notas).\nCancelar: guardarlo como entrada aparte.`);
+      if(fusionar){
+        const fusionado = fusionarVino(match, wine);
+        closeSheet();
+        try{
+          await db.collection('vinos').doc(match.id).set(fusionado);
+        }catch(e){
+          console.error(e);
+          alert('No se ha podido fusionar. Error: ' + (e.message || e.code || 'desconocido'));
+        }
+        return;
+      }
+    }
+  }
+
   const btn = document.getElementById('btnSave');
   const textoOriginal = btn.textContent;
   closeSheet();
