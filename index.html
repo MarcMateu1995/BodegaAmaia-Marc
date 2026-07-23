@@ -397,6 +397,10 @@
         <label>Precio</label>
         <div class="filter-chips" id="filtroPrecioChips"></div>
       </div>
+      <div class="field" id="filtroQuienField">
+        <label>Quién cató</label>
+        <div class="filter-chips" id="filtroQuienChips"></div>
+      </div>
       <button class="btn ghost" id="btnLimpiarFiltros" style="width:100%;margin-top:4px;padding:9px;">Limpiar filtros</button>
     </div>
   </div>
@@ -646,6 +650,7 @@ let activeTipoFilter = 'todos';
 let activeDoFilter = 'todos';
 let activePaisFilter = 'todos';
 let activePrecioFilter = 'todos';
+let activeQuienFilter = 'todos';
 let unsubscribe = null;
 let fotoBase64 = null;
 
@@ -1364,8 +1369,22 @@ function renderFiltroPrecio(){
   el.querySelectorAll('.chip').forEach(c=>c.addEventListener('click', ()=>{ activePrecioFilter=c.dataset.precio; render(); }));
 }
 
+function renderFiltroQuien(){
+  const campo = document.getElementById('filtroQuienField');
+  if(propietarioVista==='Pablo'){
+    campo.style.display = 'none';
+    activeQuienFilter = 'todos';
+    return;
+  }
+  campo.style.display = 'block';
+  const el = document.getElementById('filtroQuienChips');
+  const opts = [{v:'todos',l:'Todos'}, {v:'Marc',l:'Marc'}, {v:'Amaia',l:'Amaia'}, {v:'Ambos',l:'Ambos'}];
+  el.innerHTML = opts.map(o=>`<div class="chip ${activeQuienFilter===o.v?'active':''}" data-quien="${o.v}">${o.l}</div>`).join('');
+  el.querySelectorAll('.chip').forEach(c=>c.addEventListener('click', ()=>{ activeQuienFilter=c.dataset.quien; render(); }));
+}
+
 function actualizarBadgeFiltros(){
-  const activos = [activeDoFilter, activePaisFilter, activePrecioFilter].filter(v=>v!=='todos').length;
+  const activos = [activeDoFilter, activePaisFilter, activePrecioFilter, activeQuienFilter].filter(v=>v!=='todos').length;
   const badge = document.getElementById('filtrosBadge');
   const btn = document.getElementById('btnToggleFiltros');
   badge.style.display = activos>0 ? 'inline-block' : 'none';
@@ -1380,7 +1399,7 @@ document.getElementById('btnToggleFiltros').addEventListener('click', ()=>{
 document.getElementById('filtroDO').addEventListener('change', (e)=>{ activeDoFilter = e.target.value; render(); });
 document.getElementById('filtroPais').addEventListener('change', (e)=>{ activePaisFilter = e.target.value; render(); });
 document.getElementById('btnLimpiarFiltros').addEventListener('click', ()=>{
-  activeDoFilter = 'todos'; activePaisFilter = 'todos'; activePrecioFilter = 'todos';
+  activeDoFilter = 'todos'; activePaisFilter = 'todos'; activePrecioFilter = 'todos'; activeQuienFilter = 'todos';
   render();
 });
 
@@ -1392,6 +1411,7 @@ function getFilteredSorted(){
     if(activeDoFilter!=='todos' && (w.do||'').trim()!==activeDoFilter) return false;
     if(activePaisFilter!=='todos' && (paisDeDO(w.do)||'Sin país identificado')!==activePaisFilter) return false;
     if(activePrecioFilter!=='todos' && !precioEnBucket(w.precio, activePrecioFilter)) return false;
+    if(activeQuienFilter!=='todos' && w.quien!==activeQuienFilter) return false;
     if(q && !(`${w.nombre} ${w.bodega} ${w.uva||''} ${w.do||''}`.toLowerCase().includes(q))) return false;
     return true;
   });
@@ -1416,6 +1436,7 @@ function render(){
   renderFilterChips();
   renderFiltroDOyPais();
   renderFiltroPrecio();
+  renderFiltroQuien();
   actualizarBadgeFiltros();
   const list = getFilteredSorted();
   const container = document.getElementById('listContainer');
