@@ -35,6 +35,8 @@
     --blanco:#BE9A2A;
     --rosado:#C97B84;
     --espumoso:#7E9C86;
+    --generoso:#A66A2E;
+    --sidra:#B7B36A;
     --danger:#9C3B3B;
   }
   *{box-sizing:border-box;}
@@ -205,8 +207,8 @@
   .chipset{display:flex;gap:6px;flex-wrap:wrap;}
   .chip-opt{padding:7px 13px;border-radius:20px;border:1px solid var(--paper-dark);background:var(--paper-card);font-size:12.5px;color:var(--ink-soft);cursor:pointer;font-weight:500;}
   .chip-opt.sel{background:var(--slate);color:#fff;border-color:var(--slate);}
-  .tipo-seg{display:flex;gap:6px;}
-  .tipo-opt{flex:1;text-align:center;padding:9px 4px;border-radius:10px;border:2px solid transparent;cursor:pointer;font-size:12.5px;font-weight:600;color:#fff;}
+  .tipo-seg{display:flex;flex-wrap:wrap;gap:6px;}
+  .tipo-opt{flex:1 1 30%;min-width:80px;text-align:center;padding:9px 4px;border-radius:10px;border:2px solid transparent;cursor:pointer;font-size:12.5px;font-weight:600;color:#fff;}
   .score-row{display:flex;align-items:center;gap:12px;}
   .score-row input[type=range]{flex:1;}
   .score-display{font-family:'JetBrains Mono',monospace;font-weight:600;font-size:16px;width:40px;text-align:center;color:var(--wine);}
@@ -455,6 +457,8 @@ const TIPOS = [
   {v:'blanco', l:'Blanco', c:'var(--blanco)'},
   {v:'rosado', l:'Rosado', c:'var(--rosado)'},
   {v:'espumoso', l:'Espumoso', c:'var(--espumoso)'},
+  {v:'generoso', l:'Generoso/dulce', c:'var(--generoso)'},
+  {v:'sidra', l:'Sidra', c:'var(--sidra)'},
 ];
 const CUERPO = ['Ligero','Medio-ligero','Medio','Con cuerpo','Muy potente'];
 const TANINOS = ['Suaves','Medios','Firmes','Marcados','N/A'];
