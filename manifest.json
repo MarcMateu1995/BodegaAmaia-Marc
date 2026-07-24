@@ -1,7 +1,7 @@
 {
-  "name": "Nuestra Bodega",
+  "name": "Bodega Bacete-Mateu",
   "short_name": "Bodega",
-  "description": "Biblioteca de vinos de Marc y Amaia",
+  "description": "Biblioteca de vinos de la familia Bacete-Mateu",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#EFE6D8",

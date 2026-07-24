@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
-<title>Nuestra Bodega</title>
+<title>Bodega Bacete-Mateu</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#7A1F3D">
 <link rel="icon" href="icon-192.png">
@@ -151,7 +151,7 @@
   .foto-thumb{width:46px;height:66px;object-fit:cover;border-radius:5px;box-shadow:0 1px 4px rgba(43,30,42,0.3);flex:none;}
   .ranking-title{font-size:11px;font-weight:600;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.6px;margin-top:16px;margin-bottom:6px;text-align:center;}
   .ranking-list{display:flex;flex-direction:column;gap:4px;max-width:380px;margin:0 auto;}
-  .ranking-item{display:flex;align-items:center;gap:8px;font-size:13px;background:var(--paper-card);padding:6px 12px;border-radius:16px;}
+  .ranking-item{display:flex;align-items:center;gap:8px;font-size:13px;background:var(--paper-card);padding:6px 12px;border-radius:16px;cursor:pointer;}
   .ranking-item .rn{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden;}
   .ranking-item .rn-nombre{font-weight:500;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .ranking-item .rn-detalle{font-size:11px;color:var(--ink-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -196,6 +196,15 @@
 
   .overlay{position:fixed;inset:0;background:rgba(43,30,42,0.5);display:none;align-items:flex-end;justify-content:center;z-index:50;}
   .overlay.open{display:flex;}
+
+  .foto-thumb{cursor:pointer;}
+  .lightbox{
+    position:fixed;inset:0;background:rgba(20,12,17,0.92);display:none;
+    align-items:center;justify-content:center;z-index:90;padding:24px;
+  }
+  .lightbox.open{display:flex;}
+  .lightbox img{max-width:100%;max-height:85vh;border-radius:8px;box-shadow:0 8px 30px rgba(0,0,0,0.5);}
+  .lightbox .icon-btn{position:absolute;top:18px;right:18px;font-size:22px;background:rgba(255,255,255,0.15);color:#fff;}
   .sheet{background:var(--paper);width:100%;max-width:640px;max-height:88vh;overflow-y:auto;border-radius:20px 20px 0 0;padding:20px 20px 28px;}
   .sheet h2{font-family:'Fraunces',serif;font-style:italic;font-weight:600;font-size:22px;margin:0 0 16px;}
   .field{margin-bottom:14px;}
@@ -280,8 +289,8 @@
   .suggest-item{padding:8px 12px;font-size:13px;color:var(--ink);cursor:pointer;}
   .suggest-item:hover{background:var(--paper);}
 
-  .bodega-tabs{display:flex;gap:6px;margin-top:14px;background:var(--paper-card);border-radius:10px;padding:4px;}
-  .bodega-tab{flex:1;text-align:center;padding:8px 6px;border-radius:8px;font-size:12.5px;font-weight:600;color:var(--ink-soft);cursor:pointer;}
+  .bodega-tabs{display:flex;gap:6px;margin-top:14px;background:var(--paper-card);border-radius:10px;padding:4px;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .bodega-tab{flex:0 0 auto;text-align:center;padding:8px 14px;border-radius:8px;font-size:12.5px;font-weight:600;color:var(--ink-soft);cursor:pointer;white-space:nowrap;}
   .bodega-tab.active{background:var(--wine);color:#fff;}
   .bodega-tab .n{opacity:0.75;font-weight:500;}
 
@@ -331,7 +340,7 @@
 <!-- LOGIN SCREEN -->
 <div class="login-wrap" id="loginWrap">
   <div class="login-card">
-    <h1>Nuestra Bodega</h1>
+    <h1>Bodega Bacete-Mateu</h1>
     <div class="login-tabs">
       <div class="login-tab active" id="tabLogin">Iniciar sesión</div>
       <div class="login-tab" id="tabRegister">Crear cuenta</div>
@@ -352,7 +361,7 @@
 <!-- APP -->
 <div class="app" id="appWrap" style="display:none;">
   <header class="top">
-    <h1>Nuestra Bodega</h1>
+    <h1>Bodega Bacete-Mateu</h1>
     <div class="session-row">
       <span id="sessionEmail"></span>
       <button id="btnImport">Importar</button>
@@ -374,8 +383,8 @@
     <div class="search-row">
       <input type="text" id="searchInput" placeholder="Buscar por nombre, bodega, uva o DO...">
       <select id="sortSelect">
-        <option value="fecha_desc">Más reciente</option>
         <option value="score_desc">Mejor puntuados</option>
+        <option value="fecha_desc">Más reciente</option>
         <option value="score_asc">Peor puntuados</option>
         <option value="nombre">Nombre A-Z</option>
       </select>
@@ -397,6 +406,10 @@
         <label>Precio</label>
         <div class="filter-chips" id="filtroPrecioChips"></div>
       </div>
+      <div class="field">
+        <label>Puntuación</label>
+        <div class="filter-chips" id="filtroScoreChips"></div>
+      </div>
       <div class="field" id="filtroQuienField">
         <label>Quién cató</label>
         <div class="filter-chips" id="filtroQuienChips"></div>
@@ -413,8 +426,9 @@
 <div class="overlay" id="overlay">
   <div class="sheet">
     <h2 id="sheetTitle">Nuevo vino</h2>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:14px;margin-top:-8px;">Solo el nombre y la foto son obligatorios. Todo lo demás lo puedes dejar en blanco.</div>
     <div class="field">
-      <label>Nombre del vino</label>
+      <label>Nombre del vino *</label>
       <input type="text" id="f_nombre" placeholder="Ej. Rioja Reserva">
     </div>
     <div class="field">
@@ -462,7 +476,7 @@
     <div class="field"><label>Fecha</label><input type="date" id="f_fecha"></div>
     <div class="field"><label>Notas (opcional)</label><textarea id="f_notas" placeholder="Cualquier cosa que no encaje arriba..."></textarea></div>
     <div class="field">
-      <label>Foto de la etiqueta (opcional)</label>
+      <label>Foto de la etiqueta *</label>
       <input type="file" accept="image/*" id="f_foto">
       <div id="fotoPreviewWrap" style="margin-top:8px;display:none;">
         <img id="fotoPreview" style="max-width:120px;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,.2);">
@@ -487,6 +501,20 @@
   </div>
 </div>
 
+<div class="lightbox" id="lightboxOverlay">
+  <button class="icon-btn" id="btnCerrarLightbox">✕</button>
+  <img id="lightboxImg" src="">
+</div>
+
+<div class="overlay" id="detalleOverlay">
+  <div class="sheet">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:6px;">
+      <button class="icon-btn" id="btnCerrarDetalle" style="font-size:20px;">✕</button>
+    </div>
+    <div id="detalleOverlayContent"></div>
+  </div>
+</div>
+
 <script>
 // ---------- FIREBASE ----------
 const firebaseConfig = {
@@ -502,12 +530,24 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 
 // ---------- PROPIETARIOS (bodegas separadas dentro de la misma base de datos) ----------
-// IMPORTANTE: pon aquí el/los email(s) con los que Pablo inicie sesión.
-// Cualquier otro email se trata como bodega de Marc & Amaia.
+// IMPORTANTE: pon aquí el/los email(s) con los que cada persona inicia sesión.
+// Cualquier email que no esté en ninguna lista se trata como bodega de Marc & Amaia.
 const PABLO_EMAILS = ['p.bacete@lasanadas.es'];
+const PEP_EMAILS = ['jmateu@icab.cat'];
+// Grupos que solo tiene una persona (afecta a textos y al filtro "Quién cató").
+const PROPIETARIOS_SOLO = ['Pablo','Pep'];
+const BODEGAS = [
+  {v:'MarcAmaia', l:'Bodega de Marc y Amaia', corto:'Marc y Amaia'},
+  {v:'Pablo', l:'Bodega de Pablo', corto:'Pablo'},
+  {v:'Pep', l:'Bodega de Pep', corto:'Pep'},
+];
+function nombreBodega(v){ return (BODEGAS.find(b=>b.v===v)||{}).l || v; }
+function nombreBodegaCorto(v){ return (BODEGAS.find(b=>b.v===v)||{}).corto || v; }
 function propietarioDeEmail(email){
   const e = (email||'').trim().toLowerCase();
-  return PABLO_EMAILS.map(x=>x.toLowerCase()).includes(e) ? 'Pablo' : 'MarcAmaia';
+  if(PABLO_EMAILS.map(x=>x.toLowerCase()).includes(e)) return 'Pablo';
+  if(PEP_EMAILS.map(x=>x.toLowerCase()).includes(e)) return 'Pep';
+  return 'MarcAmaia';
 }
 let propietarioActual = 'MarcAmaia'; // bodega del usuario logueado (dueño real de lo que crea/edita)
 let propietarioVista = 'MarcAmaia';  // bodega que se está viendo ahora (pestaña activa)
@@ -639,9 +679,11 @@ function mostrarToast(texto){
   toastTimer = setTimeout(()=>el.classList.remove('show'), 3200);
 }
 const REPETIR = ['Sí','No','Tal vez'];
-const QUIEN_TODOS = [{v:'Marc', c:'var(--wine)'},{v:'Amaia', c:'var(--gold)'},{v:'Ambos', c:'var(--slate)'},{v:'Pablo', c:'var(--espumoso)'}];
+const QUIEN_TODOS = [{v:'Marc', c:'var(--wine)'},{v:'Amaia', c:'var(--gold)'},{v:'Ambos', c:'var(--slate)'},{v:'Pablo', c:'var(--espumoso)'},{v:'Pep', c:'var(--generoso)'}];
 function opcionesQuien(){
-  return propietarioActual==='Pablo' ? [{v:'Pablo', c:'var(--espumoso)'}] : [{v:'Marc', c:'var(--wine)'},{v:'Amaia', c:'var(--gold)'},{v:'Ambos', c:'var(--slate)'}];
+  if(propietarioActual==='Pablo') return [{v:'Pablo', c:'var(--espumoso)'}];
+  if(propietarioActual==='Pep') return [{v:'Pep', c:'var(--generoso)'}];
+  return [{v:'Marc', c:'var(--wine)'},{v:'Amaia', c:'var(--gold)'},{v:'Ambos', c:'var(--slate)'}];
 }
 
 let wines = [];
@@ -651,6 +693,7 @@ let activeDoFilter = 'todos';
 let activePaisFilter = 'todos';
 let activePrecioFilter = 'todos';
 let activeQuienFilter = 'todos';
+let activeScoreFilter = 'todos';
 let unsubscribe = null;
 let fotoBase64 = null;
 
@@ -669,6 +712,24 @@ function precioEnBucket(precio, bucket){
   if(bucket==='15-30') return p>=15 && p<=30;
   if(bucket==='30-60') return p>30 && p<=60;
   if(bucket==='gt60') return p>60;
+  return true;
+}
+
+const SCORE_BUCKETS = [
+  {v:'todos', l:'Todas'},
+  {v:'9', l:'9+'},
+  {v:'8', l:'8+'},
+  {v:'7', l:'7+'},
+  {v:'lt7', l:'< 7'},
+];
+function scoreEnBucket(w, bucket){
+  if(bucket==='todos') return true;
+  const n = scoreNum(w);
+  if(n===null) return false;
+  if(bucket==='9') return n>=9;
+  if(bucket==='8') return n>=8;
+  if(bucket==='7') return n>=7;
+  if(bucket==='lt7') return n<7;
   return true;
 }
 
@@ -713,7 +774,7 @@ document.getElementById('btnQuitarFoto').addEventListener('click', ()=>{
 });
 
 function tipoColor(t){ return (TIPOS.find(x=>x.v===t)||{}).c || 'var(--slate)'; }
-function tipoLabel(t){ return (TIPOS.find(x=>x.v===t)||{}).l || t; }
+function tipoLabel(t){ if(!t) return 'Sin tipo'; return (TIPOS.find(x=>x.v===t)||{}).l || t; }
 function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
 function scoreNum(w){ const n = parseFloat(w.score); return isNaN(n) ? null : n; }
 function scoreDisplay(w){ const n = scoreNum(w); return n===null ? '–' : n.toFixed(1); }
@@ -964,16 +1025,11 @@ function winesPropias(){
 }
 function renderBodegaTabs(){
   const el = document.getElementById('bodegaTabs');
-  const otras = propietarioActual==='Pablo' ? 'MarcAmaia' : 'Pablo';
-  const nombreMia = propietarioActual==='Pablo' ? 'Mi bodega' : 'Nuestra bodega';
-  const nombreOtra = propietarioActual==='Pablo' ? 'Bodega de Marc & Amaia' : 'Bodega de Pablo';
-  const nMia = wines.filter(w=>(w.propietario||'MarcAmaia')===propietarioActual).length;
-  const nOtra = wines.filter(w=>(w.propietario||'MarcAmaia')===otras).length;
   el.style.display = 'flex';
-  el.innerHTML = `
-    <div class="bodega-tab ${propietarioVista===propietarioActual?'active':''}" data-prop="${propietarioActual}">${nombreMia} <span class="n">(${nMia})</span></div>
-    <div class="bodega-tab ${propietarioVista===otras?'active':''}" data-prop="${otras}">${nombreOtra} <span class="n">(${nOtra})</span></div>
-  `;
+  el.innerHTML = BODEGAS.map(b=>{
+    const n = wines.filter(w=>(w.propietario||'MarcAmaia')===b.v).length;
+    return `<div class="bodega-tab ${propietarioVista===b.v?'active':''}" data-prop="${b.v}">${b.l} <span class="n">(${n})</span></div>`;
+  }).join('');
   el.querySelectorAll('.bodega-tab').forEach(t=>t.addEventListener('click', ()=>{
     propietarioVista = t.dataset.prop;
     render();
@@ -1033,9 +1089,9 @@ function renderGustoBoton(){
   document.getElementById('btnGusto').style.display = winesDeVista().length>=3 ? 'inline-block' : 'none';
   const btn = document.getElementById('btnGusto');
   if(propietarioVista===propietarioActual){
-    btn.textContent = propietarioActual==='Pablo' ? 'Ver mi gusto' : 'Ver nuestro gusto';
+    btn.textContent = PROPIETARIOS_SOLO.includes(propietarioActual) ? 'Ver mi gusto' : 'Ver nuestro gusto';
   }else{
-    btn.textContent = propietarioVista==='Pablo' ? 'Ver el gusto de Pablo' : 'Ver el gusto de Marc y Amaia';
+    btn.textContent = `Ver el gusto de ${nombreBodegaCorto(propietarioVista)}`;
   }
 }
 
@@ -1046,7 +1102,7 @@ document.getElementById('btnGusto').addEventListener('click', ()=>{
   if(!r){
     panel.innerHTML = '<p>Cata al menos 3 vinos con nota 7,5 o más para ver el resumen.</p>';
   }else{
-    const verbo = propietarioVista==='Pablo' ? 'prefiere' : 'preferís';
+    const verbo = PROPIETARIOS_SOLO.includes(propietarioVista) ? 'prefiere' : 'preferís';
     let texto = `Con ${r.n} vinos bien puntuados: ${verbo} cuerpo <b>${r.cuerpoModa||'variado'}</b>, dulzor <b>${r.dulzorModa||'variado'}</b>`;
     if(r.topUva) texto += `, y la uva que más repite es <b>${escapeHtml(r.topUva)}</b>`;
     texto += r.topAromas.length ? `. Los aromas que más aparecen: <b>${r.topAromas.join(', ')}</b>.` : '.';
@@ -1286,6 +1342,20 @@ function cerrarMapa(){
   document.getElementById('mapaOverlay').classList.remove('open');
 }
 
+function abrirLightbox(src){
+  if(!src) return;
+  document.getElementById('lightboxImg').src = src;
+  document.getElementById('lightboxOverlay').classList.add('open');
+}
+function cerrarLightbox(){
+  document.getElementById('lightboxOverlay').classList.remove('open');
+  document.getElementById('lightboxImg').src = '';
+}
+document.getElementById('btnCerrarLightbox').addEventListener('click', cerrarLightbox);
+document.getElementById('lightboxOverlay').addEventListener('click', (e)=>{
+  if(e.target.id==='lightboxOverlay') cerrarLightbox();
+});
+
 function actualizarMarcadoresMapa(){
   mapaMarkers.forEach(m=>mapaLeaflet.removeLayer(m));
   mapaMarkers = [];
@@ -1330,10 +1400,45 @@ function renderRanking(){
   el.innerHTML = '<div class="ranking-title">Top puntuados</div><div class="ranking-list">'+
     top.map((w,i)=>{
       const detalle = [w.bodega, w.anada].filter(Boolean).join(' · ');
-      return `<div class="ranking-item">${medals[i]||(i+1)+'º'}<div class="rn"><span class="rn-nombre">${escapeHtml(w.nombre)}</span>${detalle?`<span class="rn-detalle">${escapeHtml(detalle)}</span>`:''}</div><span class="rs">${scoreDisplay(w)}</span></div>`;
+      return `<div class="ranking-item" data-id="${w.id}">${medals[i]||(i+1)+'º'}<div class="rn"><span class="rn-nombre">${escapeHtml(w.nombre)}</span>${detalle?`<span class="rn-detalle">${escapeHtml(detalle)}</span>`:''}</div><span class="rs">${scoreDisplay(w)}</span></div>`;
     }).join('')+
     '</div>';
+  el.querySelectorAll('.ranking-item').forEach(item=>item.addEventListener('click', ()=>mostrarVinoDesdeRanking(item.dataset.id)));
 }
+
+function mostrarVinoDesdeRanking(id){
+  const w = wines.find(x=>x.id===id);
+  if(!w) return;
+  const esBodegaPropia = (w.propietario||'MarcAmaia')===propietarioActual;
+  document.getElementById('detalleOverlayContent').innerHTML = cardHtml(w, esBodegaPropia, 'popup-');
+  document.getElementById('popup-details-'+id).classList.add('open');
+  const card = document.getElementById('popup-card-'+id);
+  if(card) card.addEventListener('click', (e)=>{
+    if(e.target.closest('.icon-btn')) return;
+    document.getElementById('popup-details-'+id).classList.toggle('open');
+  });
+  const fotoThumb = document.querySelector('#popup-card-'+id+' .foto-thumb');
+  if(fotoThumb) fotoThumb.addEventListener('click', (e)=>{ e.stopPropagation(); abrirLightbox(w.foto); });
+  const btnEdit = document.getElementById('popup-edit-'+id);
+  const btnDel = document.getElementById('popup-del-'+id);
+  if(btnEdit) btnEdit.addEventListener('click', (e)=>{ e.stopPropagation(); cerrarDetallePopup(); openSheet(w); });
+  if(btnDel) btnDel.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    if(confirm('¿Eliminar '+w.nombre+' de la bodega?')){
+      db.collection('vinos').doc(w.id).delete();
+      cerrarDetallePopup();
+    }
+  });
+  document.getElementById('detalleOverlay').classList.add('open');
+}
+function cerrarDetallePopup(){
+  document.getElementById('detalleOverlay').classList.remove('open');
+  document.getElementById('detalleOverlayContent').innerHTML = '';
+}
+document.getElementById('btnCerrarDetalle').addEventListener('click', cerrarDetallePopup);
+document.getElementById('detalleOverlay').addEventListener('click', (e)=>{
+  if(e.target.id==='detalleOverlay') cerrarDetallePopup();
+});
 
 function renderFilterChips(){
   const el = document.getElementById('filterChips');
@@ -1369,9 +1474,15 @@ function renderFiltroPrecio(){
   el.querySelectorAll('.chip').forEach(c=>c.addEventListener('click', ()=>{ activePrecioFilter=c.dataset.precio; render(); }));
 }
 
+function renderFiltroScore(){
+  const el = document.getElementById('filtroScoreChips');
+  el.innerHTML = SCORE_BUCKETS.map(b=>`<div class="chip ${activeScoreFilter===b.v?'active':''}" data-score="${b.v}">${b.l}</div>`).join('');
+  el.querySelectorAll('.chip').forEach(c=>c.addEventListener('click', ()=>{ activeScoreFilter=c.dataset.score; render(); }));
+}
+
 function renderFiltroQuien(){
   const campo = document.getElementById('filtroQuienField');
-  if(propietarioVista==='Pablo'){
+  if(PROPIETARIOS_SOLO.includes(propietarioVista)){
     campo.style.display = 'none';
     activeQuienFilter = 'todos';
     return;
@@ -1384,7 +1495,7 @@ function renderFiltroQuien(){
 }
 
 function actualizarBadgeFiltros(){
-  const activos = [activeDoFilter, activePaisFilter, activePrecioFilter, activeQuienFilter].filter(v=>v!=='todos').length;
+  const activos = [activeDoFilter, activePaisFilter, activePrecioFilter, activeQuienFilter, activeScoreFilter].filter(v=>v!=='todos').length;
   const badge = document.getElementById('filtrosBadge');
   const btn = document.getElementById('btnToggleFiltros');
   badge.style.display = activos>0 ? 'inline-block' : 'none';
@@ -1399,7 +1510,7 @@ document.getElementById('btnToggleFiltros').addEventListener('click', ()=>{
 document.getElementById('filtroDO').addEventListener('change', (e)=>{ activeDoFilter = e.target.value; render(); });
 document.getElementById('filtroPais').addEventListener('change', (e)=>{ activePaisFilter = e.target.value; render(); });
 document.getElementById('btnLimpiarFiltros').addEventListener('click', ()=>{
-  activeDoFilter = 'todos'; activePaisFilter = 'todos'; activePrecioFilter = 'todos'; activeQuienFilter = 'todos';
+  activeDoFilter = 'todos'; activePaisFilter = 'todos'; activePrecioFilter = 'todos'; activeQuienFilter = 'todos'; activeScoreFilter = 'todos';
   render();
 });
 
@@ -1411,7 +1522,11 @@ function getFilteredSorted(){
     if(activeDoFilter!=='todos' && (w.do||'').trim()!==activeDoFilter) return false;
     if(activePaisFilter!=='todos' && (paisDeDO(w.do)||'Sin país identificado')!==activePaisFilter) return false;
     if(activePrecioFilter!=='todos' && !precioEnBucket(w.precio, activePrecioFilter)) return false;
-    if(activeQuienFilter!=='todos' && w.quien!==activeQuienFilter) return false;
+    if(activeScoreFilter!=='todos' && !scoreEnBucket(w, activeScoreFilter)) return false;
+    if(activeQuienFilter!=='todos'){
+      const coincide = w.quien===activeQuienFilter || (w.quien==='Ambos' && (activeQuienFilter==='Marc' || activeQuienFilter==='Amaia'));
+      if(!coincide) return false;
+    }
     if(q && !(`${w.nombre} ${w.bodega} ${w.uva||''} ${w.do||''}`.toLowerCase().includes(q))) return false;
     return true;
   });
@@ -1436,6 +1551,7 @@ function render(){
   renderFilterChips();
   renderFiltroDOyPais();
   renderFiltroPrecio();
+  renderFiltroScore();
   renderFiltroQuien();
   actualizarBadgeFiltros();
   const list = getFilteredSorted();
@@ -1457,6 +1573,8 @@ function render(){
     });
     const btnEdit = document.getElementById('edit-'+w.id);
     const btnDel = document.getElementById('del-'+w.id);
+    const fotoThumb = document.querySelector('#card-'+w.id+' .foto-thumb');
+    if(fotoThumb) fotoThumb.addEventListener('click', (e)=>{ e.stopPropagation(); abrirLightbox(w.foto); });
     if(btnEdit) btnEdit.addEventListener('click', (e)=>{e.stopPropagation(); openSheet(w);});
     if(btnDel) btnDel.addEventListener('click', (e)=>{
       e.stopPropagation();
@@ -1480,11 +1598,12 @@ function vinosParecidos(wine){
   }).sort((a,b)=>(scoreNum(b)??-Infinity)-(scoreNum(a)??-Infinity)).slice(0,3);
 }
 
-function cardHtml(w, esBodegaPropia){
+function cardHtml(w, esBodegaPropia, idPrefix){
+  idPrefix = idPrefix || '';
   const quienColor = (QUIEN_TODOS.find(q=>q.v===w.quien)||{}).c || 'var(--slate)';
   const initials = w.quien==='Ambos' ? 'M+A' : (w.quien||'?')[0];
   return `
-  <div class="card" id="card-${w.id}">
+  <div class="card" id="${idPrefix}card-${w.id}">
     <div class="capsule" style="background:${tipoColor(w.tipo)}"></div>
     <div class="perforation"></div>
     <div class="card-body">
@@ -1511,10 +1630,10 @@ function cardHtml(w, esBodegaPropia){
           ${tipoLabel(w.tipo)}
         </div>
         <div class="card-actions">
-          ${esBodegaPropia ? `<button class="icon-btn" id="edit-${w.id}">✎</button><button class="icon-btn danger" id="del-${w.id}">🗑</button>` : ''}
+          ${esBodegaPropia ? `<button class="icon-btn" id="${idPrefix}edit-${w.id}">✎</button><button class="icon-btn danger" id="${idPrefix}del-${w.id}">🗑</button>` : ''}
         </div>
       </div>
-      <div class="details" id="details-${w.id}">
+      <div class="details" id="${idPrefix}details-${w.id}">
         ${w.uva?`<div class="row"><b>Uva:</b> ${escapeHtml(w.uva)}</div>`:''}
         ${w.taninos?`<div class="row"><b>Taninos:</b> ${w.taninos}</div>`:''}
         ${w.dulzor?`<div class="row"><b>Dulzor:</b> ${w.dulzor}</div>`:''}
@@ -1652,7 +1771,7 @@ function closeSheet(){ document.getElementById('overlay').classList.remove('open
 async function handleSave(){
   const nombre = document.getElementById('f_nombre').value.trim();
   if(!nombre){ alert('Ponle un nombre al vino.'); return; }
-  if(!sel.tipo){ alert('Elige el tipo de vino.'); return; }
+  if(!fotoBase64){ alert('Añade una foto del vino.'); return; }
   const wine = {
     nombre,
     bodega: document.getElementById('f_bodega').value.trim(),
